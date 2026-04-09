@@ -631,7 +631,7 @@ function decisionEngine(a: Answers): TestKey | null {
 }
 
 function postHocRecommendation(resultKey: TestKey | null, pairwiseType: PairwiseType) {
-  if (!pairwiseType || pairwiseType === "no") return null;
+  if (!pairwiseType) return null;
   if (resultKey === "anova") {
     if (pairwiseType === "allpairs") return { title: "Recommended post hoc: Tukey", text: "Use Tukey when you want to compare all groups with all other groups after a one-way ANOVA." };
     if (pairwiseType === "vscontrol") return { title: "Recommended post hoc: Dunnett", text: "Use Dunnett when you want to compare each group against one control group." };
