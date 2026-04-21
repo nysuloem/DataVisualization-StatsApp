@@ -642,6 +642,16 @@ function postHocRecommendation(resultKey: TestKey | null, pairwiseType: Pairwise
     if (pairwiseType === "vscontrol") return { title: "Recommended post hoc: compare each condition to baseline/control", text: "Choose the option that compares each condition to the control while correcting for multiple comparisons." };
     if (pairwiseType === "planned") return { title: "Recommended post hoc: Bonferroni", text: "Use Bonferroni when you only have a limited set of planned repeated-measures comparisons." };
   }
+  if (resultKey === "kruskal") {
+    if (pairwiseType === "allpairs") return { title: "Recommended post hoc: Dunn's test", text: "Dunn's test is the standard non-parametric follow-up after a significant Kruskal-Wallis test. It compares every pair of groups on their ranks and corrects for multiple comparisons." };
+    if (pairwiseType === "vscontrol") return { title: "Recommended post hoc: Dunn's test (vs control)", text: "Run Dunn's test but only keep the comparisons against your control group. Apply the multiple-comparisons correction to those comparisons only." };
+    if (pairwiseType === "planned") return { title: "Recommended post hoc: pairwise Mann-Whitney with Bonferroni", text: "For a small number of planned non-parametric comparisons, run pairwise Mann-Whitney tests and apply a Bonferroni correction across them." };
+  }
+  if (resultKey === "friedman") {
+    if (pairwiseType === "allpairs") return { title: "Recommended post hoc: Dunn's test", text: "In Prism 11, Dunn's test is the standard follow-up after a significant Friedman test and compares every pair of conditions on their ranks with a multiple-comparisons correction. In R, pairwise Wilcoxon signed-rank tests with Bonferroni or Holm correction is the equivalent approach." };
+    if (pairwiseType === "vscontrol") return { title: "Recommended post hoc: Dunn's test (vs control)", text: "Run Dunn's test but only interpret the comparisons against your baseline or control condition." };
+    if (pairwiseType === "planned") return { title: "Recommended post hoc: pairwise Wilcoxon with Bonferroni", text: "For a small number of planned non-parametric comparisons after Friedman, run pairwise Wilcoxon signed-rank tests and apply a Bonferroni correction across them." };
+  }
   return null;
 }
 
@@ -859,6 +869,7 @@ export default function App() {
         next.pairing = "";
         next.needsPairwise = "";
         next.pairwiseType = "";
+        next.anovaSignificant = "";
         next.software = "";
       }
 
@@ -873,6 +884,7 @@ export default function App() {
         next.pairing = "";
         next.needsPairwise = "";
         next.pairwiseType = "";
+        next.anovaSignificant = "";
         next.software = "";
       }
 
@@ -880,12 +892,14 @@ export default function App() {
         next.numFactors = "";
         next.needsPairwise = "";
         next.pairwiseType = "";
+        next.anovaSignificant = "";
         next.software = "";
       }
 
       if (Object.prototype.hasOwnProperty.call(patch, "numFactors")) {
         next.needsPairwise = "";
         next.pairwiseType = "";
+        next.anovaSignificant = "";
         next.software = "";
       }
 
@@ -896,6 +910,7 @@ export default function App() {
       if (Object.prototype.hasOwnProperty.call(patch, "shape")) {
         next.needsPairwise = "";
         next.pairwiseType = "";
+        next.anovaSignificant = "";
         next.software = "";
       }
 
@@ -906,22 +921,23 @@ export default function App() {
       if (Object.prototype.hasOwnProperty.call(patch, "pairing")) {
         next.needsPairwise = "";
         next.pairwiseType = "";
+        next.anovaSignificant = "";
         next.software = "";
       }
 
       if (Object.prototype.hasOwnProperty.call(patch, "needsPairwise")) {
         next.pairwiseType = "";
-        next.anovaSignificant = "";
-        next.software = "";
+        // do NOT reset anovaSignificant — it is asked BEFORE needsPairwise in the new flow
       }
 
       if (Object.prototype.hasOwnProperty.call(patch, "pairwiseType")) {
-        next.anovaSignificant = "";
-        next.software = "";
+        // keep anovaSignificant — it was asked before pairwiseType in new flow
       }
 
       if (Object.prototype.hasOwnProperty.call(patch, "anovaSignificant")) {
-        next.software = "";
+        // reset downstream pairwise choices so the user re-enters them after seeing sig yes/no
+        next.needsPairwise = "";
+        next.pairwiseType = "";
       }
 
       return next;
@@ -933,17 +949,26 @@ export default function App() {
   const result = resultKey ? TESTS[resultKey] : null;
   const postHoc = postHocRecommendation(resultKey, answers.pairwiseType);
   const allChecked = Boolean(result) && checked.length === result.assumptions.length;
-  const supportsPairwise = (resultKey === "anova" || resultKey === "rm_anova");
+  const supportsPairwise = (resultKey === "anova" || resultKey === "rm_anova" || resultKey === "kruskal" || resultKey === "friedman");
   const supportsTwoWayPostHoc = resultKey === "two_way_anova" || resultKey === "mixed_anova";
-  const canChooseSoftware = Boolean(result) && allChecked &&
-    (!supportsPairwise || answers.needsPairwise === "no" ||
-      (Boolean(postHoc) && (answers.anovaSignificant === "yes" || answers.anovaSignificant === "no")));
+
+  // For ANOVA tests (supportsPairwise): software can be chosen right after assumption check
+  // For non-ANOVA tests: software can be chosen right after assumption check
+  // The ANOVA significance question now comes AFTER the how-to-do-it panel
+  const canChooseSoftware = Boolean(result) && allChecked;
+
+  // Is this a test where 3+ groups are being compared (so letters-above-bars is a valid alternative)?
+  const isMultiGroupComparison =
+    resultKey === "anova" ||
+    resultKey === "kruskal" ||
+    resultKey === "rm_anova" ||
+    resultKey === "friedman";
 
   return (
     <div className="min-h-screen bg-slate-50 p-6">
       <div className="mx-auto max-w-5xl space-y-6">
         <div className="rounded-3xl bg-slate-900 p-6 text-white">
-          <h1 className="text-3xl font-bold">BIOB32 Data Visualization & Analysis Assistant</h1>
+          <h1 className="text-3xl font-bold">Data Visualization & Analysis Tool</h1>
         </div>
 
         <Panel title="Step 1: What is the research question that you are looking to analyze?">
@@ -970,7 +995,7 @@ export default function App() {
               <div className="mt-3 grid grid-cols-2 gap-3">
                 <ButtonChoice selected={answers.multipleTests === "no"} onClick={() => updateAnswers({ multipleTests: "no", numTests: "" })}>
                   <strong>No</strong>
-                  <p>I am not running any other related statistical tests</p>
+                  <p>I am running only this one statistical test</p>
                 </ButtonChoice>
                 <ButtonChoice selected={answers.multipleTests === "yes"} onClick={() => updateAnswers({ multipleTests: "yes" })}>
                   <strong>Yes</strong>
@@ -1121,7 +1146,11 @@ export default function App() {
               <div className="rounded-2xl bg-blue-700 p-4 text-white shadow-lg ring-2 ring-blue-300">
                 <strong>{plot.title}</strong>
                 <p className="mt-1">{plot.text}</p>
-                {plot.note && <p className="mt-2 text-xs">{plot.note}</p>}
+                {plot.note && (
+                  <p className="mt-3 rounded-lg bg-amber-400/95 p-3 text-base font-semibold text-slate-900">
+                    {plot.note}
+                  </p>
+                )}
                 <div className="mt-3 rounded-xl bg-white/10 p-3 text-sm">
                   <strong>How to make this in GraphPad Prism 11:</strong>
                   {answers.goal === "groups" && (
@@ -1261,7 +1290,7 @@ export default function App() {
             <div>
               <strong>How many groups or conditions?</strong>
               <div className="mt-2 grid grid-cols-2 gap-2">
-                <ButtonChoice selected={answers.ivGroups === "2"} onClick={() => updateAnswers({ ivGroups: "2" })}>Two</ButtonChoice>
+                <ButtonChoice selected={answers.ivGroups === "2"} onClick={() => updateAnswers({ ivGroups: "2" })}>2</ButtonChoice>
                 <ButtonChoice selected={answers.ivGroups === "3plus"} onClick={() => updateAnswers({ ivGroups: "3plus" })}>3+</ButtonChoice>
               </div>
             </div>
@@ -1316,78 +1345,8 @@ export default function App() {
           </Panel>
         )}
 
-        {result && allChecked && supportsPairwise && (
-          <Panel title="Step 6: Do you need pairwise comparisons?">
-            <div className="mb-4 rounded bg-slate-50 p-3 text-sm">
-              <strong>What this means:</strong>
-              <p className="mt-1">The overall ANOVA tells you whether there is evidence that some groups differ somewhere in the dataset. Pairwise comparisons ask which specific pairs differ.</p>
-            </div>
-            <div className="grid gap-3">
-              <ButtonChoice selected={answers.needsPairwise === "no"} onClick={() => updateAnswers({ needsPairwise: "no" })}>
-                <strong>No</strong>
-                <p>I only need the overall result</p>
-              </ButtonChoice>
-              <ButtonChoice selected={answers.needsPairwise === "yes"} onClick={() => updateAnswers({ needsPairwise: "yes" })}>
-                <strong>Yes</strong>
-                <p>I need to know which specific groups or conditions differ</p>
-              </ButtonChoice>
-            </div>
-
-            {answers.needsPairwise === "yes" && (
-              <div className="mt-4">
-                <strong>What kind of pairwise comparisons do you need?</strong>
-                <div className="mt-2 grid gap-3">
-                  <ButtonChoice selected={answers.pairwiseType === "allpairs"} onClick={() => updateAnswers({ pairwiseType: "allpairs" })}>
-                    <strong>All pairs</strong>
-                    <p>Compare every group or condition with every other one</p>
-                  </ButtonChoice>
-                  <ButtonChoice selected={answers.pairwiseType === "vscontrol"} onClick={() => updateAnswers({ pairwiseType: "vscontrol" })}>
-                    <strong>Each group vs one control or baseline</strong>
-                    <p>Compare every group or condition to one reference group</p>
-                  </ButtonChoice>
-                  <ButtonChoice selected={answers.pairwiseType === "planned"} onClick={() => updateAnswers({ pairwiseType: "planned" })}>
-                    <strong>A small number of planned comparisons</strong>
-                    <p>You only want a few specific comparisons that you decided in advance</p>
-                  </ButtonChoice>
-                </div>
-              </div>
-            )}
-
-            {postHoc && answers.anovaSignificant === "" && (
-              <div className="mt-4">
-                <strong>Before choosing software: was the overall ANOVA p-value significant?</strong>
-                <p className="mt-1 mb-3 text-sm text-slate-600">Run the ANOVA first, then come back and answer this before proceeding to the post hoc step.</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <ButtonChoice selected={answers.anovaSignificant === "yes"} onClick={() => updateAnswers({ anovaSignificant: "yes" })}>
-                    <strong>Yes (p &lt; 0.05)</strong>
-                    <p>There is evidence that at least one group differs — proceed to post hoc</p>
-                  </ButtonChoice>
-                  <ButtonChoice selected={answers.anovaSignificant === "no"} onClick={() => updateAnswers({ anovaSignificant: "no" })}>
-                    <strong>No (p ≥ 0.05)</strong>
-                    <p>No evidence of any difference between groups</p>
-                  </ButtonChoice>
-                </div>
-              </div>
-            )}
-
-            {postHoc && answers.anovaSignificant === "yes" && (
-              <div className="mt-4 rounded bg-blue-700 p-4 text-white">
-                <strong>{postHoc.title}</strong>
-                <p className="mt-1">{postHoc.text}</p>
-              </div>
-            )}
-
-            {postHoc && answers.anovaSignificant === "no" && (
-              <div className="mt-4 rounded bg-slate-600 p-4 text-white">
-                <strong>Overall ANOVA not significant — no post hoc needed</strong>
-                <p className="mt-1">A non-significant ANOVA means there is not enough evidence to conclude that any groups differ from each other. Do not run post hoc tests — doing so inflates the risk of false positives. Report the overall ANOVA result and conclude that no significant differences were detected.</p>
-              </div>
-            )}
-          </Panel>
-        )}
-
         {canChooseSoftware && (
-          <Panel title={`Step ${supportsPairwise ? "7" : "6"}: Choose software for statistical analysis`}>
+          <Panel title="Step 6: Choose software for statistical analysis">
             <div className="mb-3 rounded bg-slate-50 p-3 text-sm">Both options perform the same statistical idea. The choice here is about which software workflow you want to follow.</div>
             <div className="grid grid-cols-2 gap-3">
               <ButtonChoice selected={answers.software === "prism"} onClick={() => updateAnswers({ software: "prism" })}>GraphPad Prism 11</ButtonChoice>
@@ -1397,7 +1356,7 @@ export default function App() {
         )}
 
         {canChooseSoftware && answers.software && result && (
-          <Panel title={`Step ${supportsPairwise ? "8" : "7"}: How to do it in ${answers.software === "prism" ? "GraphPad Prism 11" : "R"}`}>
+          <Panel title={`Step 7: How to do it in ${answers.software === "prism" ? "GraphPad Prism 11" : "R"}`}>
             {answers.software === "prism" ? (
               <div>
                 <div className="mb-3 rounded bg-emerald-50 p-3 text-sm">
@@ -1420,19 +1379,6 @@ export default function App() {
                   ))}
                 </ol>
                 <CodeBox code={result.rCode} />
-              </div>
-            )}
-
-            {postHoc && answers.anovaSignificant === "yes" && (
-              <div className="mt-4 rounded bg-slate-50 p-4 text-sm">
-                <strong>Now run the post hoc test:</strong>
-                <p className="mt-1">Because the overall ANOVA was significant and you need {answers.pairwiseType === "allpairs" ? "all pairwise comparisons" : answers.pairwiseType === "vscontrol" ? "comparisons against a control group" : "planned comparisons"}, use <strong>{postHoc.title.replace("Recommended post hoc: ", "")}</strong>.</p>
-                {answers.software === "prism" && (
-                  <p className="mt-2">In Prism: when the analysis options ask about multiple comparisons, select the {postHoc.title.replace("Recommended post hoc: ", "")} option.</p>
-                )}
-                {answers.software === "r" && (
-                  <p className="mt-2">In R: after running the ANOVA, use the appropriate post hoc function as shown in the code above (TukeyHSD for Tukey, or adjust the emmeans call for other methods).</p>
-                )}
               </div>
             )}
 
@@ -1464,9 +1410,125 @@ export default function App() {
                 )}
               </div>
             )}
+          </Panel>
+        )}
 
+        {/* ── NEW: ANOVA significance + post hoc flow, AFTER running the test ── */}
+        {canChooseSoftware && answers.software && supportsPairwise && (
+          <Panel title={`Step 8: Interpret your ${result?.title ?? "test"} result`}>
+            <div className="mb-4 rounded bg-slate-50 p-3 text-sm">
+              <strong>What this means:</strong>
+              <p className="mt-1">The overall {result?.title ?? "test"} tells you whether there is evidence that some groups differ somewhere in the dataset. If the overall p-value is significant, you can then ask which specific pairs of groups differ using a post hoc test.</p>
+            </div>
+
+            <strong>Now that you have run the {result?.title ?? "test"}: was the overall p-value significant?</strong>
+            <div className="mt-2 grid grid-cols-2 gap-3">
+              <ButtonChoice selected={answers.anovaSignificant === "yes"} onClick={() => updateAnswers({ anovaSignificant: "yes" })}>
+                <strong>Yes (p &lt; 0.05)</strong>
+                <p>There is evidence that at least one group differs — proceed to post hoc</p>
+              </ButtonChoice>
+              <ButtonChoice selected={answers.anovaSignificant === "no"} onClick={() => updateAnswers({ anovaSignificant: "no" })}>
+                <strong>No (p ≥ 0.05)</strong>
+                <p>No evidence of any difference between groups</p>
+              </ButtonChoice>
+            </div>
+
+            {answers.anovaSignificant === "no" && (
+              <div className="mt-4 rounded bg-slate-600 p-4 text-white">
+                <strong>Overall {result?.title ?? "test"} not significant — no post hoc needed</strong>
+                <p className="mt-1">A non-significant result means there is not enough evidence to conclude that any groups differ from each other. Do not run post hoc tests — doing so inflates the risk of false positives. Report the overall result and conclude that no significant differences were detected.</p>
+              </div>
+            )}
+
+            {answers.anovaSignificant === "yes" && (
+              <>
+                <div className="mt-4">
+                  <strong>Do you need pairwise comparisons?</strong>
+                  <div className="mt-2 grid gap-3">
+                    <ButtonChoice selected={answers.needsPairwise === "no"} onClick={() => updateAnswers({ needsPairwise: "no" })}>
+                      <strong>No</strong>
+                      <p>I only need the overall result</p>
+                    </ButtonChoice>
+                    <ButtonChoice selected={answers.needsPairwise === "yes"} onClick={() => updateAnswers({ needsPairwise: "yes" })}>
+                      <strong>Yes</strong>
+                      <p>I need to know which specific groups or conditions differ</p>
+                    </ButtonChoice>
+                  </div>
+                </div>
+
+                {answers.needsPairwise === "yes" && (
+                  <div className="mt-4">
+                    <strong>What kind of pairwise comparisons do you need?</strong>
+                    <div className="mt-2 grid gap-3">
+                      <ButtonChoice selected={answers.pairwiseType === "allpairs"} onClick={() => updateAnswers({ pairwiseType: "allpairs" })}>
+                        <strong>All pairs</strong>
+                        <p>Compare every group or condition with every other one</p>
+                      </ButtonChoice>
+                      <ButtonChoice selected={answers.pairwiseType === "vscontrol"} onClick={() => updateAnswers({ pairwiseType: "vscontrol" })}>
+                        <strong>Each group vs one control or baseline</strong>
+                        <p>Compare every group or condition to one reference group</p>
+                      </ButtonChoice>
+                      <ButtonChoice selected={answers.pairwiseType === "planned"} onClick={() => updateAnswers({ pairwiseType: "planned" })}>
+                        <strong>A small number of planned comparisons</strong>
+                        <p>You only want a few specific comparisons that you decided in advance</p>
+                      </ButtonChoice>
+                    </div>
+                  </div>
+                )}
+
+                {postHoc && (
+                  <div className="mt-4 rounded bg-blue-700 p-4 text-white">
+                    <strong>{postHoc.title}</strong>
+                    <p className="mt-1">{postHoc.text}</p>
+                  </div>
+                )}
+
+                {postHoc && (
+                  <div className="mt-4 rounded bg-slate-50 p-4 text-sm">
+                    <strong>How to run the post hoc test:</strong>
+                    {answers.software === "prism" && (
+                      <p className="mt-2">In Prism: when the analysis options ask about multiple comparisons, select the <strong>{postHoc.title.replace("Recommended post hoc: ", "")}</strong> option.</p>
+                    )}
+                    {answers.software === "r" && (resultKey === "anova" || resultKey === "rm_anova") && (
+                      <p className="mt-2">In R: after running the ANOVA, use the appropriate post hoc function — for example, <code>TukeyHSD(model)</code> for Tukey, or use <code>emmeans</code> with a different adjustment for the other methods.</p>
+                    )}
+                    {answers.software === "r" && resultKey === "kruskal" && (
+                      <>
+                        <p className="mt-2">In R, Dunn's test is available from the <code>FSA</code> or <code>dunn.test</code> package. Install it once with <code>install.packages("FSA")</code>, then run:</p>
+                        <CodeBox code={`library(FSA)
+
+# df has 'outcome' and 'group' columns from the Kruskal-Wallis step
+dunnTest(outcome ~ group, data = df, method = "bonferroni")`} />
+                        <p className="mt-2">For planned pairwise comparisons instead, use <code>pairwise.wilcox.test(df$outcome, df$group, p.adjust.method = "bonferroni")</code>.</p>
+                      </>
+                    )}
+                    {answers.software === "r" && resultKey === "friedman" && (
+                      <>
+                        <p className="mt-2">R does not have a single built-in function equivalent to Prism's Dunn's test after Friedman. The standard approach is pairwise Wilcoxon signed-rank tests with a Bonferroni or Holm correction:</p>
+                        <CodeBox code={`# df has 'subject', 'condition', and 'outcome' columns from the Friedman step
+pairwise.wilcox.test(df$outcome, df$condition,
+                     paired = TRUE,
+                     p.adjust.method = "bonferroni")`} />
+                        <p className="mt-2">Alternatively, the <code>PMCMRplus</code> package provides Nemenyi's test via <code>frdAllPairsNemenyiTest()</code> if you prefer that approach.</p>
+                      </>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </Panel>
+        )}
+
+        {/* ── Final figure annotation guidance — shown once the flow is complete ── */}
+        {canChooseSoftware && answers.software && result && (
+          !supportsPairwise ||
+          answers.anovaSignificant === "no" ||
+          (answers.anovaSignificant === "yes" && answers.needsPairwise === "no") ||
+          (answers.anovaSignificant === "yes" && answers.needsPairwise === "yes" && answers.pairwiseType)
+        ) && (
+          <Panel title={`Step ${supportsPairwise ? "9" : "8"}: Annotate your figure with the result`}>
             {answers.multipleTests === "yes" && answers.numTests && Number(answers.numTests) >= 2 && (
-              <div className="mt-6 rounded bg-red-50 p-4 text-sm ring-2 ring-red-300">
+              <div className="mb-4 rounded bg-red-50 p-4 text-sm ring-2 ring-red-300">
                 <strong>⚠ Multiple comparisons correction required</strong>
                 <p className="mt-1">Because you are running <strong>{answers.numTests} related tests</strong> in this experiment, there is an elevated risk of a false positive result by chance alone. You must apply a <strong>Bonferroni correction</strong>.</p>
                 <p className="mt-2">Your corrected significance threshold is:</p>
@@ -1475,7 +1537,7 @@ export default function App() {
               </div>
             )}
 
-            <div className="mt-6 rounded bg-amber-50 p-3 text-sm">
+            <div className="rounded bg-amber-50 p-3 text-sm">
               <strong>Showing the result on your figure:</strong>
               {(() => {
                 const bonferroni = answers.multipleTests === "yes" && Number(answers.numTests) >= 2;
@@ -1666,7 +1728,7 @@ export default function App() {
                   );
                 }
 
-                /* Group comparison tests */
+                /* Group comparison tests — t-tests, Mann-Whitney, Wilcoxon, ANOVA, Kruskal, RM-ANOVA, Friedman */
                 return (
                   <ul className="mt-2 space-y-1">
                     {answers.software === "r" && <li>• Take the <strong>p-value</strong> from your R output, then return to GraphPad Prism to annotate the figure.</li>}
@@ -1705,6 +1767,52 @@ export default function App() {
                       </svg>
                     </li>
                     <AsteriskTable />
+
+                    {/* ── Alternative letters-above-bars notation for multi-group comparisons ── */}
+                    {isMultiGroupComparison && (
+                      <>
+                        <li className="pt-3 mt-3 border-t border-amber-300">
+                          <strong>Alternative: letters above bars</strong> — for comparisons among three or more groups, many papers use compact letter display instead of brackets. Groups that <strong>share a letter</strong> are <em>not</em> significantly different from each other; groups with <strong>different letters</strong> are significantly different. This is often cleaner than stacked brackets when every pair has been tested.
+                        </li>
+                        <li>
+                          <svg className={svgClass} viewBox="0 0 230 160" xmlns="http://www.w3.org/2000/svg">
+                            <rect x="25" y="10" width="195" height="130" fill="white" stroke="#ccc" strokeWidth="1"/>
+                            {/* y-axis baseline */}
+                            <line x1="25" y1="130" x2="220" y2="130" stroke="#ccc" strokeWidth="1"/>
+                            {/* Group A bar — low */}
+                            <rect x="45" y="95" width="30" height="35" fill="#cbd5e1"/>
+                            {[88, 93, 100, 96, 91].map((y, i) => <circle key={`a-${i}`} cx={60 + (i%3-1)*6} cy={y} r="3" fill="#475569"/>)}
+                            <line x1="60" y1="82" x2="60" y2="95" stroke="#475569" strokeWidth="1.5"/>
+                            <line x1="54" y1="82" x2="66" y2="82" stroke="#475569" strokeWidth="1.5"/>
+                            {/* Group B bar — medium */}
+                            <rect x="105" y="70" width="30" height="60" fill="#cbd5e1"/>
+                            {[63, 68, 74, 72, 66].map((y, i) => <circle key={`b-${i}`} cx={120 + (i%3-1)*6} cy={y} r="3" fill="#475569"/>)}
+                            <line x1="120" y1="57" x2="120" y2="70" stroke="#475569" strokeWidth="1.5"/>
+                            <line x1="114" y1="57" x2="126" y2="57" stroke="#475569" strokeWidth="1.5"/>
+                            {/* Group C bar — high */}
+                            <rect x="165" y="45" width="30" height="85" fill="#cbd5e1"/>
+                            {[38, 43, 50, 47, 41].map((y, i) => <circle key={`c-${i}`} cx={180 + (i%3-1)*6} cy={y} r="3" fill="#475569"/>)}
+                            <line x1="180" y1="32" x2="180" y2="45" stroke="#475569" strokeWidth="1.5"/>
+                            <line x1="174" y1="32" x2="186" y2="32" stroke="#475569" strokeWidth="1.5"/>
+                            {/* letters above each bar */}
+                            <text x="60" y="76" fontSize="12" fontWeight="bold" fill="#be123c" textAnchor="middle">a</text>
+                            <text x="120" y="51" fontSize="12" fontWeight="bold" fill="#be123c" textAnchor="middle">ab</text>
+                            <text x="180" y="26" fontSize="12" fontWeight="bold" fill="#be123c" textAnchor="middle">b</text>
+                            {/* group labels */}
+                            <text x="60" y="148" fontSize="8" fill="#64748b" textAnchor="middle">Group A</text>
+                            <text x="120" y="148" fontSize="8" fill="#64748b" textAnchor="middle">Group B</text>
+                            <text x="180" y="148" fontSize="8" fill="#64748b" textAnchor="middle">Group C</text>
+                            <text x="14" y="75" fontSize="8" fill="#64748b" transform="rotate(-90,14,75)">Outcome</text>
+                          </svg>
+                        </li>
+                        <li className="ml-4 mt-1 rounded bg-white p-2 text-xs leading-relaxed">
+                          <strong>How to read the letters in this example:</strong>
+                          <span className="block mt-1">• Group A (labelled <strong>a</strong>) and Group C (labelled <strong>b</strong>) do <em>not</em> share a letter → significantly different.</span>
+                          <span className="block">• Group B (labelled <strong>ab</strong>) shares the letter <strong>a</strong> with Group A and the letter <strong>b</strong> with Group C → not significantly different from either one.</span>
+                          <span className="block mt-1 italic text-slate-500">In the figure legend, state the test and significance level, e.g. <em>Groups not sharing a letter are significantly different (Tukey, p &lt; 0.05).</em></span>
+                        </li>
+                      </>
+                    )}
                   </ul>
                 );
               })()}
