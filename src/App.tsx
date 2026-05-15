@@ -242,13 +242,13 @@ kruskal.test(outcome ~ group, data = df)`,
       "Choose Parametric.",
       "Inspect the overall result first.",
     ],
-    rSteps: ["Put the data into long format with subject, condition, and outcome columns.", "Fit a repeated-measures ANOVA model.", "Inspect the ANOVA table."],
-    rCode: `subject   <- c(1,1,1, 2,2,2, 3,3,3)
+    rSteps: ["Only for true repeated data, add a replicate_id column to show which rows came from the same physical sample.", "Fit a repeated-measures ANOVA model.", "Inspect the ANOVA table."],
+    rCode: `replicate_id <- factor(c(1,1,1, 2,2,2, 3,3,3))
 condition <- c("A","B","C", "A","B","C", "A","B","C")
 outcome   <- c(72, 68, 65, 75, 70, 69, 78, 74, 71)
 
-df <- data.frame(subject, condition, outcome)
-model <- aov(outcome ~ condition + Error(subject/condition), data = df)
+df <- data.frame(replicate_id, condition, outcome)
+model <- aov(outcome ~ condition + Error(replicate_id/condition), data = df)
 summary(model)`,
   },
   friedman: {
@@ -267,13 +267,13 @@ summary(model)`,
       "Choose Nonparametric.",
       "Run the analysis and read the p-value.",
     ],
-    rSteps: ["Put the data into long format with subject, condition, and outcome columns.", "Run the Friedman test.", "Read the p-value."],
-    rCode: `subject   <- c(1,1,1, 2,2,2, 3,3,3)
+    rSteps: ["Only for true repeated data, add a replicate_id column to show which rows came from the same physical sample.", "Run the Friedman test.", "Read the p-value."],
+    rCode: `replicate_id <- factor(c(1,1,1, 2,2,2, 3,3,3))
 condition <- c("A","B","C", "A","B","C", "A","B","C")
 outcome   <- c(72, 68, 65, 75, 70, 69, 78, 74, 71)
 
-df <- data.frame(subject, condition, outcome)
-friedman.test(outcome ~ condition | subject, data = df)`,
+df <- data.frame(replicate_id, condition, outcome)
+friedman.test(outcome ~ condition | replicate_id, data = df)`,
   },
   correlation: {
     title: "Correlation (Pearson)",
@@ -444,7 +444,7 @@ pairs(emm, adjust = "tukey")`,
       "Read the interaction term p-value first before interpreting anything else.",
     ],
     rSteps: [
-      "Create a long-format data frame with columns for: subject ID, the independent grouping variable, the repeated-measures variable, and the outcome.",
+      "Only for true repeated data, add a replicate_id column to show which rows came from the same physical sample, plus columns for group, condition, and outcome.",
       "Fit the mixed ANOVA model using aov() with an Error() term for the repeated-measures variable.",
       "Inspect the summary — read the interaction term first.",
       "If the interaction is significant, use emmeans to test simple effects.",
@@ -453,16 +453,16 @@ pairs(emm, adjust = "tukey")`,
 # If needed, run install.packages("emmeans") once before library(emmeans).
 
 # Long-format data frame — replace variable names and values with your own
-subject    <- c(1,1,1, 2,2,2, 3,3,3, 4,4,4)
+replicate_id <- factor(c(1,1,1, 2,2,2, 3,3,3, 4,4,4))
 group      <- c("A","A","A", "A","A","A", "B","B","B", "B","B","B")   # independent grouping variable
 condition  <- c("C1","C2","C3", "C1","C2","C3",
                 "C1","C2","C3", "C1","C2","C3")                        # repeated-measures variable
 outcome    <- c(224, 252, 226, 210, 194, 216, 181, 125, 156, 152, 164, 152)
 
-df <- data.frame(subject = factor(subject), group, condition, outcome)
+df <- data.frame(replicate_id, group, condition, outcome)
 
 # Mixed ANOVA
-model <- aov(outcome ~ group * condition + Error(subject/condition), data = df)
+model <- aov(outcome ~ group * condition + Error(replicate_id/condition), data = df)
 summary(model)
 
 # If interaction is significant, test simple effects:
@@ -470,17 +470,17 @@ emm <- emmeans(model, ~ condition | group)
 pairs(emm, adjust = "tukey")`,
   },
   advanced_nonparametric_model: {
-    title: "Model-based analysis with an outlier sensitivity check",
-    when: "Your design has more than one explanatory variable, and the data are skewed or include influential outliers. Instead of switching back to a simple parametric test, use R to keep the design together and then check whether the outlier changes the conclusion.",
+    title: "Model-based analysis with an outlier check",
+    when: "Your design has more than one explanatory variable and the data are skewed or include a possible outlier. Keep the design together, then check whether the unusual value changes the conclusion.",
     assumptions: [
       "I have a continuous outcome variable",
-      "The design is more complex than a simple two-group or one-factor comparison",
+      "The same outcome variable was measured across several related conditions that were part of a similar experimental design",
+      "Those conditions are connected parts of the same design, not separate unrelated questions",
       "The data are skewed or include influential outliers",
       "I will not ignore or delete outliers unless there is clear evidence of a data-entry or measurement error",
     ],
     prism: [
       "GraphPad Prism can still be used to graph the data, but R is better for keeping this design together while checking outlier influence.",
-      "Do not switch back to a regular two-way or mixed ANOVA just because the design has two factors.",
       "Use R for a model-based sensitivity check: run the planned model with all data, then repeat it without the possible outlier only to see whether the conclusion changes.",
       "As a sensitivity check, compare the conclusion with and without the outlier, but do not delete the outlier from the final analysis unless there is clear evidence it is an error.",
     ],
@@ -496,8 +496,7 @@ pairs(emm, adjust = "tukey")`,
 df <- data.frame(
   outcome = c(12.1, 11.8, 13.0, 30.5, 10.9, 11.4),
   factor1 = c("A", "A", "B", "B", "A", "B"),
-  factor2 = c("X", "Y", "X", "Y", "X", "Y"),
-  subject = c(1, 2, 3, 4, 5, 6)
+  factor2 = c("X", "Y", "X", "Y", "X", "Y")
 )
 
 # 1. Plot the full dataset and identify the possible outlier.
@@ -562,10 +561,10 @@ pairs(emm, adjust = "tukey")`,
   },
   two_factor_reference_model: {
     title: "Two-factor model with planned comparisons against a reference value",
-    when: "Use this when one continuous outcome is measured across combinations of two grouping variables, and each combination needs to be compared with the same reference value, such as zero.",
+    when: "Use this when one continuous outcome is measured across conditions defined by two planned features, and each condition needs to be compared with the same reference value, such as zero.",
     assumptions: [
       "I have one continuous outcome variable",
-      "I have two grouping variables, such as strain and substrate",
+      "Each condition is defined by two planned features, such as sample type and treatment",
       "Each observation belongs to one combination of those two variables",
       "Data are not extremely skewed or dominated by outliers",
     ],
@@ -577,14 +576,14 @@ pairs(emm, adjust = "tukey")`,
     ],
     rSteps: [
       "Create a data frame with one outcome column and one column for each grouping variable.",
-      "Fit one model that includes both grouping variables and their interaction.",
-      "Estimate the mean for each combination of the two grouping variables.",
+      "Fit one model that includes both planned features and their interaction.",
+      "Estimate the mean response for each condition created by those two features.",
       "Test each combination against the reference value using a multiple-comparisons correction.",
     ],
     rCode: `library(emmeans)
 # If needed, run install.packages("emmeans") once before library(emmeans).
 
-# Example: one response measured across two grouping variables
+# Example: one response measured across conditions defined by two features
 response <- c(0.42, 0.38, 0.45, 0.16, 0.20, 0.18,
               0.30, 0.34, 0.28, 0.05, 0.03, 0.04)
 factor1 <- c("group 1", "group 1", "group 1", "group 1", "group 1", "group 1",
@@ -623,8 +622,8 @@ pairs(emmeans(model, ~ factor2 | factor1), adjust = "bonferroni")`,
       "If you are using Prism only, run the repeated-condition reference-value analyses separately with a correction; use R when you want the combined matched/repeated model-based version.",
     ],
     rSteps: [
-      "Create a long-format data frame with subject/sample ID, condition, and outcome columns.",
-      "Fit a model that accounts for repeated measurements from the same subject or sample.",
+      "Only for true repeated data, add a replicate_id column to show which rows came from the same physical sample.",
+      "Fit a model that accounts for repeated measurements from the same sample, culture, animal, person, or other experimental unit.",
       "Estimate the mean for each condition.",
       "Test each condition mean against the reference value using a multiple-comparisons correction.",
     ],
@@ -632,22 +631,22 @@ pairs(emmeans(model, ~ factor2 | factor1), adjust = "bonferroni")`,
 # If needed, run install.packages("emmeans") once before library(emmeans).
 
 # Example: the same samples measured in several conditions
-sample_id <- factor(c(1,1, 2,2, 3,3, 4,4))
+replicate_id <- factor(c(1,1, 2,2, 3,3, 4,4))
 condition <- c("condition A", "condition B", "condition A", "condition B",
                "condition A", "condition B", "condition A", "condition B")
 response <- c(0.42, 0.16, 0.38, 0.20, 0.45, 0.18, 0.40, 0.14)
 
-df <- data.frame(sample_id, condition, response)
+df <- data.frame(replicate_id, condition, response)
 
 # Beginner-friendly repeated-measures model
-model <- aov(response ~ condition + Error(sample_id/condition), data = df)
+model <- aov(response ~ condition + Error(replicate_id/condition), data = df)
 summary(model)
 
 # For planned condition means against the reference value, a mixed model is cleaner:
 # install.packages("lme4") and install.packages("lmerTest") once if needed
 library(lme4)
 library(lmerTest)
-mixed_model <- lmer(response ~ condition + (1 | sample_id), data = df)
+mixed_model <- lmer(response ~ condition + (1 | replicate_id), data = df)
 emm <- emmeans(mixed_model, ~ condition)
 test(emm, null = 0, adjust = "bonferroni")`,
   },
@@ -929,7 +928,7 @@ function plotRecommendation(goal: Goal, pairing: Pairing, categoryMode: Category
     if (referenceDesign === "multiple_two_factors") {
       return {
         title: "Recommended plot: Grouped dot plot with a reference line",
-        text: "Because you are testing several combinations against the same reference value, show the outcome for each combination of the two grouping variables. Add a horizontal reference line at the reference value, such as zero.",
+        text: "Because you are testing several combinations against the same reference value, show the outcome for each condition created by the two planned features. Add a horizontal reference line at the reference value, such as zero.",
         note: "Figure tip: show individual data points with mean and SD bars.",
         prism: [
           "Click New Table & Graph.",
@@ -1174,7 +1173,7 @@ function RDataTableGuide({ resultKey }: { resultKey: TestKey }) {
     return (
       <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm">
         <strong>How your data should look in R</strong>
-        <p className="mt-1">Use one row for each measurement. The response column contains the measured value. The factor columns describe the experimental condition for that row.</p>
+        <p className="mt-1">Use one row for each measurement. The response column contains the measured value. The factor columns describe the condition for that row. For most class datasets, each row is simply one independent replicate or class group result.</p>
         <table className="mt-3 w-full border-collapse bg-white text-xs">
           <thead><tr><th className="border p-2 text-left">factor1</th><th className="border p-2 text-left">factor2</th><th className="border p-2 text-left">response</th></tr></thead>
           <tbody>
@@ -1185,7 +1184,8 @@ function RDataTableGuide({ resultKey }: { resultKey: TestKey }) {
             <tr><td className="border p-2">B</td><td className="border p-2">Y</td><td className="border p-2">0.05</td></tr>
           </tbody>
         </table>
-        <p className="mt-2">The model line <code>response ~ factor1 * factor2</code> tells R to test factor1, factor2, and whether the effect of one factor depends on the other.</p>
+        <p className="mt-2">The model line <code>response ~ factor1 * factor2</code> tells R to test factor1, factor2, and whether the effect of one factor depends on the other. This last part is the <strong>interaction</strong>.</p>
+        <p className="mt-2"><strong>No sample ID needed here:</strong> for independent class data, do not add an ID column. An ID column is only needed for a true paired/repeated design, where the exact same physical sample was measured more than once.</p>
       </div>
     );
   }
@@ -1194,9 +1194,9 @@ function RDataTableGuide({ resultKey }: { resultKey: TestKey }) {
     return (
       <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm">
         <strong>How your data should look in R</strong>
-        <p className="mt-1">Use one row for each measurement. If the same sample, animal, person, or class dataset was measured more than once, include a subject column so R knows which rows belong together.</p>
+        <p className="mt-1">Most class datasets do <strong>not</strong> need an ID column. Add one only for a true paired/repeated design: the exact same physical sample, person, animal, plant, well, tube, or culture was measured more than once.</p>
         <table className="mt-3 w-full border-collapse bg-white text-xs">
-          <thead><tr><th className="border p-2 text-left">subject</th><th className="border p-2 text-left">group</th><th className="border p-2 text-left">condition</th><th className="border p-2 text-left">response</th></tr></thead>
+          <thead><tr><th className="border p-2 text-left">replicate_id</th><th className="border p-2 text-left">group</th><th className="border p-2 text-left">condition</th><th className="border p-2 text-left">response</th></tr></thead>
           <tbody>
             <tr><td className="border p-2">1</td><td className="border p-2">A</td><td className="border p-2">before</td><td className="border p-2">12.1</td></tr>
             <tr><td className="border p-2">1</td><td className="border p-2">A</td><td className="border p-2">after</td><td className="border p-2">10.4</td></tr>
@@ -1204,7 +1204,7 @@ function RDataTableGuide({ resultKey }: { resultKey: TestKey }) {
             <tr><td className="border p-2">2</td><td className="border p-2">B</td><td className="border p-2">after</td><td className="border p-2">11.2</td></tr>
           </tbody>
         </table>
-        <p className="mt-2">Rows with the same subject number are linked measurements from the same experimental unit.</p>
+        <p className="mt-2">Rows with the same <code>replicate_id</code> are linked because they came from the exact same replicate. A class group number is usually not needed unless that same group produced matched repeated measurements that must stay linked.</p>
       </div>
     );
   }
@@ -1249,7 +1249,7 @@ function ROutputGuide({ resultKey }: { resultKey: TestKey }) {
       <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm">
         <strong>How to read the R output</strong>
         <ul className="mt-2 space-y-1">
-          <li>• First find the interaction term, usually written like <code>factor1:factor2</code> or <code>group:condition</code>.</li>
+          <li>• First find the interaction term, usually written like <code>factor1:factor2</code> or <code>group:condition</code>. The interaction asks whether the effect of one factor depends on the other factor.</li>
           <li>• If the interaction p-value is significant, the effect of one variable depends on the other variable. Interpret simple effects rather than only main effects.</li>
           <li>• If the interaction is not significant, then read the main-effect rows for each variable.</li>
           <li>• If you use <code>emmeans</code>, read the adjusted <code>p.value</code> column for the follow-up comparisons.</li>
@@ -1471,9 +1471,9 @@ export default function App() {
 
           {answers.questionSubmitted && (
             <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">
-              <strong>Do you have any similar research questions in the same experiment?</strong>
+              <strong>Are you analyzing any other similar questions for this experiment?</strong>
               <p className="mt-1 text-slate-600">
-                Similar questions are questions that feel like they belong to the same experiment. This step helps you decide whether they should be handled together as one analysis, or kept separate.
+                Similar questions use the same general dataset or experimental setup and ask about related outcome variables, groups, conditions, time points, treatments, doses, species, or other explanatory features. This step helps you decide whether your questions should be analyzed together in one statistical analysis or in separate analyses.
               </p>
               <div className="mt-3 grid grid-cols-2 gap-3">
                 <ButtonChoice selected={answers.multipleTests === "no"} onClick={() => updateAnswers({ multipleTests: "no", similarQuestions: "", similarQuestionChecks: [], similarQuestionsDecision: "", numTests: "" })}>
@@ -1501,45 +1501,45 @@ export default function App() {
                   <div className="rounded bg-white p-3">
                     <strong>Choose the statement that best fits each pair.</strong>
                     <p className="mt-1 text-slate-600">
-                      For the paired choices, selecting one automatically clears the opposing choice. The app will use your answers to recommend whether the questions should be handled together or separately.
+                      Choose one statement from each pair below. Then choose any additional statements that apply. The app will use your answers to recommend whether the questions should be handled together in one statistical analysis or in separate analyses.
                     </p>
                     <div className="mt-3 space-y-3">
                       {[
                         {
                           heading: "Outcome variable",
-                          prompt: "Are the questions measuring the same kind of response, or different responses?",
+                          prompt: "Are all questions measuring the same response variable?",
                           exclusive: true,
                           options: [
-                            ["same_outcome", "Same outcome: the questions measure the same response variable, such as heart rate, enzyme activity, body mass, pigment concentration, growth rate, or movement speed."],
-                            ["different_outcomes", "Different outcomes: the questions measure clearly different response variables that would need to be explained separately."],
+                            ["same_outcome", "Same outcome: all questions measure the same response variable."],
+                            ["different_outcomes", "Different outcomes: the questions measure different response variables."],
                           ],
                         },
                         {
                           heading: "Experimental design",
-                          prompt: "Do the questions come from the same experimental design, or different designs?",
+                          prompt: "Do all questions use the same experimental design?",
                           exclusive: true,
                           options: [
-                            ["same_experiment", "Same experiment/design: the questions come from the same dataset and were collected using the same basic design."],
-                            ["different_designs", "Different designs: the questions come from different experiments or use different sampling structures."],
+                            ["same_experiment", "Same experimental design: the questions use the same sampling structure and comparison."],
+                            ["different_designs", "Different experimental designs: the questions use different sampling structures or comparisons."],
                           ],
                         },
                         {
                           heading: "What changes between the questions?",
-                          prompt: "Is the difference between questions focused, or are the questions really about different things?",
+                          prompt: "What is changing from one question to the next?",
                           exclusive: true,
                           options: [
-                            ["one_changed_variable", "One thing changes: the questions mostly differ by one group, treatment, dose, species, sex, time point, or substrate."],
-                            ["unrelated_data", "Many things change: the questions use unrelated datasets or answer genuinely different biological questions."],
+                            ["one_changed_variable", "One thing changes: the questions differ by one main variable."],
+                            ["unrelated_data", "Many things change: the questions differ in several important ways."],
                           ],
                         },
                         {
                           heading: "Additional features that may connect the questions",
-                          prompt: "Check any extra statements that apply.",
+                          prompt: "Choose any additional statements that apply.",
                           exclusive: false,
                           options: [
-                            ["same_samples_or_matched", "The same samples, animals, people, or matched class datasets appear in more than one condition or time point."],
-                            ["same_reference", "The questions compare the same outcome against the same reference value, such as asking whether several treatment groups differ from zero change, baseline, or a known expected value."],
-                            ["effect_changes_across_group", "I want to know whether the pattern changes depending on another grouping variable, such as whether a treatment effect differs between males and females."],
+                            ["same_samples_or_matched", "The same measured units appear in more than one condition or time point."],
+                            ["same_reference", "The questions compare the same outcome with the same reference value, such as zero or baseline."],
+                            ["effect_changes_across_group", "I want to know whether the effect of one condition changes across another sample feature."],
                           ],
                         },
                       ].map((section) => {
@@ -1570,15 +1570,9 @@ export default function App() {
                     </div>
                   </div>
 
-                  {answers.similarQuestionChecks.includes("same_reference") && (
-                    <div className="rounded bg-blue-50 p-3 text-sm text-slate-900">
-                      <strong>Reference-value note:</strong> When the same outcome is compared against the same reference value in several related conditions, treat the condition itself as part of the design. For example, instead of asking several separate questions about whether each treatment differs from zero change, frame the analysis around the response across treatment conditions, with the shared reference value built into the analysis.
-                    </div>
-                  )}
-
                   {answers.similarQuestionsDecision === "single" && (
                     <div className="rounded bg-blue-700 p-3 text-white">
-                      <strong>Recommendation: handle these together as one analysis.</strong> The questions look like parts of the same overall design. This usually gives a clearer and more powerful analysis than splitting the same design into many smaller questions.
+                      <strong>Recommendation: handle these together in one statistical analysis.</strong> The questions look like parts of the same overall design. This usually gives a clearer and more powerful analysis than splitting the same design into many smaller questions.
                     </div>
                   )}
 
@@ -1604,7 +1598,7 @@ export default function App() {
 
                   {answers.similarQuestionsDecision === "continue" && (
                     <div className="rounded bg-amber-200 p-3 text-slate-900">
-                      <strong>Recommendation: continue with the question above.</strong> The checked statements do not clearly show that the questions must be combined or must be separated. Continue through the app for this research question, and use the later design choices to decide whether the analysis should stay simple or become a combined analysis.
+                      <strong>Recommendation: continue with the question above.</strong> Your answers do not clearly require combining or separating the questions. Continue with this research question; the later design choices will help classify the analysis.
                     </div>
                   )}
                 </div>
@@ -1624,15 +1618,15 @@ export default function App() {
             <div className="grid gap-3 text-sm">
               <ButtonChoice selected={answers.dataType === "continuous"} onClick={() => updateAnswers({ dataType: "continuous" })}>
                 <strong>Continuous variables</strong>
-                <p>Numerical measurements that can take any value along a scale — such as heart rate, enzyme activity, body mass, reaction time, or oxygen consumption</p>
+                <p>Numerical measurements on a scale, such as rate, mass, time, activity, or concentration</p>
               </ButtonChoice>
               <ButtonChoice selected={answers.dataType === "ordinal"} onClick={() => updateAnswers({ dataType: "ordinal" })}>
                 <strong>Ordinal / rating scale variables</strong>
-                <p>Scores on a numbered scale where the categories are ordered but the spacing between them may not be equal — such as a pain rating from 1–10, a behavioural score, or a Likert-scale response</p>
+                <p>Ordered scores or ratings, such as a 1–5 scale, behavioural score, or Likert response</p>
               </ButtonChoice>
               <ButtonChoice selected={answers.dataType === "categorical"} onClick={() => updateAnswers({ dataType: "categorical" })}>
                 <strong>Categorical count variables</strong>
-                <p>Tallies of how many observations fall into each discrete category — such as the number of animals displaying a behaviour, the number of cells in each phase of the cell cycle, or the number of organisms in each size class</p>
+                <p>Counts of how many observations fall into each category</p>
               </ButtonChoice>
             </div>
 
@@ -1649,19 +1643,19 @@ export default function App() {
                   <div className="grid gap-3 text-sm">
                     <ButtonChoice selected={answers.goal === "groups"} onClick={() => updateAnswers({ goal: "groups" })}>
                       <strong>Compare groups or conditions</strong>
-                      <p>Test whether the measured values differ between two or more groups or conditions</p>
+                      <p>Test whether measured values differ between groups or conditions (group comparison)</p>
                     </ButtonChoice>
                     <ButtonChoice selected={answers.goal === "relationship"} onClick={() => updateAnswers({ goal: "relationship" })}>
                       <strong>Test a relationship</strong>
-                      <p>Determine whether two continuous variables are related, or estimate a scaling exponent</p>
+                      <p>Determine whether two measured variables are related (correlation or scaling)</p>
                     </ButtonChoice>
                     <ButtonChoice selected={answers.goal === "linear_model"} onClick={() => updateAnswers({ goal: "linear_model" })}>
                       <strong>Model multiple variables</strong>
-                      <p>Use one continuous outcome variable and test the effect of more than one predictor</p>
+                      <p>Use one measured outcome and more than one possible explanatory variable (model)</p>
                     </ButtonChoice>
                     <ButtonChoice selected={answers.goal === "one_sample"} onClick={() => updateAnswers({ goal: "one_sample" })}>
                       <strong>Test measurements against a reference value</strong>
-                      <p>Test whether the mean of your measurements differs significantly from a specific expected value, such as zero or a known population mean</p>
+                      <p>Test whether measurements differ from an expected value, such as zero or baseline (reference-value test)</p>
                     </ButtonChoice>
                   </div>
                 )}
@@ -1735,25 +1729,25 @@ export default function App() {
                 <div className="my-4 border-t border-slate-200" />
                 <div className="mb-3 flex items-center gap-2">
                   <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-bold text-white">2c</span>
-                  <span className="font-semibold">How many things are you comparing with the reference value?</span>
+                  <span className="font-semibold">What is being compared with the reference value?</span>
                 </div>
-                <p className="mb-3 text-sm text-slate-600">Use this when your reference value is something like zero change, baseline, a null expectation, or a known expected value.</p>
+                <p className="mb-3 text-sm text-slate-600">Choose based on what was actually measured. A group, strain, species, or treatment is a category; a repeated design means the same physical sample was measured more than once.</p>
                 <div className="grid gap-3 text-sm">
                   <ButtonChoice selected={answers.referenceDesign === "single"} onClick={() => updateAnswers({ referenceDesign: "single" })}>
-                    <strong>One set of measurements</strong>
-                    <p>Example: one group of measurements tested against zero.</p>
+                    <strong>One sample group or condition <span className="text-xs font-normal">(one-sample design)</span></strong>
+                    <p>All measurements belong to one condition and are compared with the same reference value.</p>
                   </ButtonChoice>
                   <ButtonChoice selected={answers.referenceDesign === "multiple_one_factor"} onClick={() => updateAnswers({ referenceDesign: "multiple_one_factor" })}>
-                    <strong>Several groups or conditions, organized by one variable</strong>
-                    <p>Example: one response measured across several treatments, doses, temperatures, species, or time points, all compared with the same reference value.</p>
+                    <strong>Different conditions, differing in one way <span className="text-xs font-normal">(one-factor design)</span></strong>
+                    <p>The conditions differ by one planned feature, such as treatment, dose, time, or species.</p>
                   </ButtonChoice>
                   <ButtonChoice selected={answers.referenceDesign === "multiple_two_factors"} onClick={() => updateAnswers({ referenceDesign: "multiple_two_factors" })}>
-                    <strong>Several combinations, organized by two variables</strong>
-                    <p>Example: one response measured across combinations of two grouping variables, such as treatment × sex, temperature × species, or dose × time, with each combination compared with the same reference value.</p>
+                    <strong>Different conditions, differing in two ways <span className="text-xs font-normal">(two-factor design)</span></strong>
+                    <p>The conditions are defined by two planned features. The samples in each condition are separate.</p>
                   </ButtonChoice>
                   <ButtonChoice selected={answers.referenceDesign === "multiple_matched"} onClick={() => updateAnswers({ referenceDesign: "multiple_matched" })}>
-                    <strong>The same samples were tested in several conditions</strong>
-                    <p>Example: the same samples, animals, people, or class datasets were measured under several conditions, so the measurements are linked.</p>
+                    <strong>The exact same samples were measured more than once <span className="text-xs font-normal">(paired/repeated design)</span></strong>
+                    <p>Choose this only when the same physical sample appears in more than one condition.</p>
                   </ButtonChoice>
                 </div>
               </>
@@ -1881,7 +1875,7 @@ export default function App() {
                 )}
                 {answers.shape === "outliers" && (
                   <div className="mt-3 rounded bg-amber-50 p-4 text-sm ring-2 ring-amber-300">
-                    <strong>How to think about the outlier:</strong> An outlier can sometimes be a data-entry or measurement error. However, in this course the dataset has been vetted before being posted, so do not delete the value just because it is inconvenient. Instead, treat it as a real observation and ask whether it is strongly influencing the statistical conclusion. A good sensitivity check is to compare the conclusion with and without the outlier and report if the conclusion changes.
+                    <strong>How to think about the outlier:</strong> An outlier can sometimes be a data-entry or measurement error. However, in this course the dataset has been vetted before being posted, so do not delete the value just because it is inconvenient. First, run the recommended test using all of the data. Then repeat the same test after temporarily removing the possible outlier as a sensitivity check. Do not switch to a different test for the second run, because then you cannot tell whether the conclusion changed because of the outlier or because of the different test. If the conclusion changes, report that the result is sensitive to the outlier.
                   </div>
                 )}
               </div>
@@ -1961,11 +1955,6 @@ export default function App() {
                 <strong>Reference-value design selected:</strong> The app is keeping these comparisons together because they share one outcome variable and one reference value. The conditions are treated as part of the design rather than as unrelated separate tests.
               </div>
             )}
-            {resultKey === "advanced_nonparametric_model" && (
-              <div className="mb-4 rounded bg-red-50 p-3 text-sm ring-2 ring-red-300">
-                <strong>Do not switch back to ANOVA here:</strong> Your earlier choices indicate that a regular two-way ANOVA or mixed ANOVA is not appropriate without extra guidance. This is exactly the situation where the app should stop students from automatically returning to a parametric ANOVA.
-              </div>
-            )}
             <strong>Verify assumptions before proceeding:</strong>
             {result.assumptions.map((assumption, index) => (
               <label key={assumption} className="mt-1 block">
@@ -2015,7 +2004,7 @@ export default function App() {
                     <a className="font-semibold underline" href="https://cran.r-project.org/" target="_blank" rel="noreferrer">
                       Download R
                     </a>
-                    . Choose the version for your operating system. You do not need to install RStudio for this tool. You can copy and paste the code below into the basic R program after installing R.
+                    . Choose the version for your operating system. After installing R, open the basic R program and copy and paste the code below.
                   </p>
                 </div>
                 {resultKey && isModelBasedRPath(resultKey) && <RDataTableGuide resultKey={resultKey} />}
@@ -2026,6 +2015,14 @@ export default function App() {
                 </ol>
                 <CodeBox code={result.rCode} />
                 {resultKey && isModelBasedRPath(resultKey) && <ROutputGuide resultKey={resultKey} />}
+              </div>
+            )}
+
+            {answers.shape === "outliers" && (
+              <div className="mt-6 rounded bg-amber-50 p-4 text-sm ring-2 ring-amber-300">
+                <strong>Outlier sensitivity check</strong>
+                <p className="mt-2">Run the recommended test once with all data included. Then repeat the same test after temporarily removing the possible outlier. Keep the test type the same for both runs so the comparison isolates the influence of the outlier.</p>
+                <p className="mt-2">If both runs lead to the same biological conclusion, the result is less dependent on the outlier. If the conclusion changes, report that the result is sensitive to the outlier and avoid making a strong claim from that analysis alone.</p>
               </div>
             )}
 
@@ -2152,7 +2149,7 @@ dunnTest(outcome ~ group, data = df, method = "bonferroni")`} />
                     {answers.software === "r" && resultKey === "friedman" && (
                       <>
                         <p className="mt-2">R does not have a single built-in function equivalent to Prism's Dunn's test after Friedman. The standard approach is pairwise Wilcoxon signed-rank tests with a Bonferroni or Holm correction:</p>
-                        <CodeBox code={`# df has 'subject', 'condition', and 'outcome' columns from the Friedman step
+                        <CodeBox code={`# df has 'replicate_id', 'condition', and 'outcome' columns from the Friedman step
 pairwise.wilcox.test(df$outcome, df$condition,
                      paired = TRUE,
                      p.adjust.method = "bonferroni")`} />
