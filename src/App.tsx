@@ -5,6 +5,7 @@ type Shape = "" | "symmetric" | "skewed" | "outliers" | "linear" | "nonlinear";
 type RelationshipMode = "" | "association" | "scaling";
 type IvGroups = "" | "2" | "3plus";
 type NumFactors = "" | "one" | "two";
+type ReferenceDesign = "" | "single" | "multiple_one_factor" | "multiple_two_factors" | "multiple_matched";
 type Pairing = "" | "independent" | "paired" | "one_sample" | "mixed";
 type YesNo = "" | "yes" | "no";
 type SimilarQuestionsDecision = "" | "single" | "separate" | "ask_ta";
@@ -14,6 +15,7 @@ type SimilarQuestionCheck =
   | "one_changed_variable"
   | "same_samples_or_matched"
   | "effect_changes_across_group"
+  | "same_reference"
   | "different_outcomes"
   | "different_designs"
   | "unrelated_data";
@@ -39,6 +41,7 @@ type Answers = {
   categoryMode: CategoryMode;
   ivGroups: IvGroups;
   numFactors: NumFactors;
+  referenceDesign: ReferenceDesign;
   pairing: Pairing;
   needsPairwise: YesNo;
   pairwiseType: PairwiseType;
@@ -63,6 +66,9 @@ type TestKey =
   | "chisq_gof"
   | "one_sample_t"
   | "one_sample_wilcoxon"
+  | "one_factor_reference_model"
+  | "two_factor_reference_model"
+  | "repeated_reference_model"
   | "two_way_anova"
   | "mixed_anova"
   | "advanced_nonparametric_model";
@@ -508,6 +514,135 @@ summary(sensitivity_model)
 # If the conclusion changes, report that the result is outlier-sensitive.`,
   },
 
+  one_factor_reference_model: {
+    title: "One-factor model with planned comparisons against a reference value",
+    when: "Use this when one continuous outcome is measured in several related groups or conditions, and each group or condition needs to be compared with the same reference value, such as zero.",
+    assumptions: [
+      "I have one continuous outcome variable",
+      "I have several groups or conditions that all use the same reference value",
+      "Each observation belongs to only one group or condition",
+      "Data are not extremely skewed or dominated by outliers",
+    ],
+    prism: [
+      "GraphPad Prism can graph this design easily, but the combined reference-value analysis is clearer in R.",
+      "Create a Column table with one column for each group or condition.",
+      "Show individual data points with Mean and SD, and add a horizontal reference line at the reference value.",
+      "If your course requires Prism only, ask your TA or instructor whether to run separate one-sample analyses with a correction or to use R for the combined analysis.",
+    ],
+    rSteps: [
+      "Create a data frame with one column for the outcome and one column for the group or condition.",
+      "Fit one model with group or condition as the predictor.",
+      "Use planned comparisons to test each group or condition mean against the reference value.",
+      "Use a multiple-comparisons correction because several means are being compared with the same reference value.",
+    ],
+    rCode: `library(emmeans)
+
+# Example: one yeast strain tested with multiple substrates
+oxidation <- c(0.42, 0.38, 0.45, 0.04, 0.02, 0.05)
+substrate <- c("glucose", "glucose", "glucose", "stevia", "stevia", "stevia")
+
+df <- data.frame(oxidation, substrate)
+model <- lm(oxidation ~ substrate, data = df)
+
+# Estimated mean oxidation for each substrate
+emm <- emmeans(model, ~ substrate)
+emm
+
+# Test whether each substrate mean differs from zero
+# adjust = "bonferroni" is simple and conservative for beginner use
+test(emm, null = 0, adjust = "bonferroni")
+
+# Optional: compare substrates to each other
+pairs(emm, adjust = "tukey")`,
+  },
+  two_factor_reference_model: {
+    title: "Two-factor model with planned comparisons against a reference value",
+    when: "Use this when one continuous outcome is measured across combinations of two grouping variables, and each combination needs to be compared with the same reference value, such as zero.",
+    assumptions: [
+      "I have one continuous outcome variable",
+      "I have two grouping variables, such as strain and substrate",
+      "Each observation belongs to one combination of those two variables",
+      "Data are not extremely skewed or dominated by outliers",
+    ],
+    prism: [
+      "GraphPad Prism can make the grouped graph, but the planned reference-value comparisons are clearer in R.",
+      "Create a Grouped table with one factor in rows and the other factor in columns.",
+      "Show individual data points with Mean and SD, and add a horizontal reference line at the reference value.",
+      "If your course requires Prism only, ask your TA or instructor whether to simplify the analysis or use R for the planned comparisons.",
+    ],
+    rSteps: [
+      "Create a data frame with one outcome column and one column for each grouping variable.",
+      "Fit one model that includes both grouping variables and their interaction.",
+      "Estimate the mean for each combination of the two grouping variables.",
+      "Test each combination against the reference value using a multiple-comparisons correction.",
+    ],
+    rCode: `library(emmeans)
+
+# Example: two yeast strains tested with glucose and stevia
+oxidation <- c(0.42, 0.38, 0.45, 0.04, 0.02, 0.05,
+               0.30, 0.34, 0.28, 0.01, 0.03, 0.02)
+strain <- c("strain 1", "strain 1", "strain 1", "strain 1", "strain 1", "strain 1",
+            "strain 2", "strain 2", "strain 2", "strain 2", "strain 2", "strain 2")
+substrate <- c("glucose", "glucose", "glucose", "stevia", "stevia", "stevia",
+               "glucose", "glucose", "glucose", "stevia", "stevia", "stevia")
+
+df <- data.frame(oxidation, strain, substrate)
+model <- lm(oxidation ~ strain * substrate, data = df)
+summary(model)
+
+# Estimated mean oxidation for each strain-substrate combination
+emm <- emmeans(model, ~ strain * substrate)
+emm
+
+# Test whether each strain-substrate combination differs from zero
+test(emm, null = 0, adjust = "bonferroni")
+
+# Optional: compare glucose vs stevia within each strain
+pairs(emmeans(model, ~ substrate | strain), adjust = "bonferroni")`,
+  },
+  repeated_reference_model: {
+    title: "Repeated-measures model with planned comparisons against a reference value",
+    when: "Use this when the same sample, culture, animal, person, or matched unit is measured in several conditions, and each condition needs to be compared with the same reference value.",
+    assumptions: [
+      "I have one continuous outcome variable",
+      "The same sample, culture, animal, person, or matched unit appears in more than one condition",
+      "The conditions all use the same reference value",
+      "Data are not extremely skewed or dominated by outliers",
+    ],
+    prism: [
+      "GraphPad Prism can graph this as paired or repeated data, but the combined reference-value analysis is clearer in R.",
+      "Create a Column table and choose the option for paired or repeated values entered in rows.",
+      "Show individual data points with Mean and SD, and add a horizontal reference line at the reference value.",
+      "If your course requires Prism only, ask your TA or instructor whether to use repeated one-sample analyses with a correction or to use R for the combined analysis.",
+    ],
+    rSteps: [
+      "Create a long-format data frame with subject/sample ID, condition, and outcome columns.",
+      "Fit a model that accounts for repeated measurements from the same subject or sample.",
+      "Estimate the mean for each condition.",
+      "Test each condition mean against the reference value using a multiple-comparisons correction.",
+    ],
+    rCode: `library(emmeans)
+
+# Example: the same yeast preparations tested with multiple substrates
+sample_id <- factor(c(1,1, 2,2, 3,3, 4,4))
+substrate <- c("glucose", "stevia", "glucose", "stevia", "glucose", "stevia", "glucose", "stevia")
+oxidation <- c(0.42, 0.04, 0.38, 0.02, 0.45, 0.05, 0.40, 0.03)
+
+df <- data.frame(sample_id, substrate, oxidation)
+
+# Beginner-friendly repeated-measures model
+model <- aov(oxidation ~ substrate + Error(sample_id/substrate), data = df)
+summary(model)
+
+# For planned condition means against zero, a mixed model is cleaner:
+# install.packages("lme4") and install.packages("lmerTest") once if needed
+library(lme4)
+library(lmerTest)
+mixed_model <- lmer(oxidation ~ substrate + (1 | sample_id), data = df)
+emm <- emmeans(mixed_model, ~ substrate)
+test(emm, null = 0, adjust = "bonferroni")`,
+  },
+
   one_sample_t: {
     title: "One-sample t test",
     when: "Test whether the mean of your measurements is significantly different from a specific expected or hypothesized value (such as zero, or a known population mean).",
@@ -633,6 +768,7 @@ const INITIAL_ANSWERS: Answers = {
   categoryMode: "",
   ivGroups: "",
   numFactors: "",
+  referenceDesign: "",
   pairing: "",
   needsPairwise: "",
   pairwiseType: "",
@@ -646,6 +782,7 @@ const COMBINE_SUPPORTING_CHECKS: SimilarQuestionCheck[] = [
   "one_changed_variable",
   "same_samples_or_matched",
   "effect_changes_across_group",
+  "same_reference",
 ];
 
 const SEPARATE_SUPPORTING_CHECKS: SimilarQuestionCheck[] = [
@@ -655,11 +792,32 @@ const SEPARATE_SUPPORTING_CHECKS: SimilarQuestionCheck[] = [
 ];
 
 function similarQuestionsRecommendation(checks: SimilarQuestionCheck[]): SimilarQuestionsDecision {
+  const hasSameOutcome = checks.includes("same_outcome");
+  const hasSameExperiment = checks.includes("same_experiment");
+  const hasOneChangedVariable = checks.includes("one_changed_variable");
+  const hasSameReference = checks.includes("same_reference");
+  const hasEffectModificationQuestion = checks.includes("effect_changes_across_group");
+  const hasMatchedSamples = checks.includes("same_samples_or_matched");
   const hasSeparateSignal = SEPARATE_SUPPORTING_CHECKS.some((check) => checks.includes(check));
-  const combineScore = COMBINE_SUPPORTING_CHECKS.filter((check) => checks.includes(check)).length;
 
   if (hasSeparateSignal) return "separate";
-  if (combineScore >= 2) return "single";
+
+  // Strong signal that the questions are really parts of one design:
+  // same outcome + same experiment + one variable changes between questions.
+  if (hasSameOutcome && hasSameExperiment && hasOneChangedVariable) return "single";
+
+  // Same outcome measured against the same reference value in multiple conditions
+  // should usually be framed as one design with condition as a factor.
+  if (hasSameOutcome && hasSameExperiment && hasSameReference) return "single";
+
+  // If the student wants to know whether an effect differs across another group,
+  // that is almost always one combined design rather than separate analyses.
+  if (hasSameOutcome && hasEffectModificationQuestion) return "single";
+
+  // Matched/repeated samples across related conditions often belong together,
+  // but require enough other agreement before making a confident recommendation.
+  if (hasSameOutcome && hasMatchedSamples && (hasSameExperiment || hasOneChangedVariable)) return "single";
+
   if (checks.length > 0) return "ask_ta";
   return "";
 }
@@ -668,8 +826,12 @@ function decisionEngine(a: Answers): TestKey | null {
   const nonParametric = a.shape === "skewed" || a.shape === "outliers" || a.shape === "nonlinear";
 
   if (a.goal === "one_sample") {
-    if (!a.shape) return null;
-    return nonParametric ? "one_sample_wilcoxon" : "one_sample_t";
+    if (!a.referenceDesign || !a.shape) return null;
+    if (a.referenceDesign === "single") return nonParametric ? "one_sample_wilcoxon" : "one_sample_t";
+    if (nonParametric) return "advanced_nonparametric_model";
+    if (a.referenceDesign === "multiple_one_factor") return "one_factor_reference_model";
+    if (a.referenceDesign === "multiple_two_factors") return "two_factor_reference_model";
+    if (a.referenceDesign === "multiple_matched") return "repeated_reference_model";
   }
 
   // Ordinal goals — route directly to non-parametric equivalents
@@ -747,7 +909,7 @@ function postHocRecommendation(resultKey: TestKey | null, pairwiseType: Pairwise
   return null;
 }
 
-function plotRecommendation(goal: Goal, pairing: Pairing, categoryMode: CategoryMode = "", numFactors: NumFactors = ""): PlotHelp | null {
+function plotRecommendation(goal: Goal, pairing: Pairing, categoryMode: CategoryMode = "", numFactors: NumFactors = "", referenceDesign: ReferenceDesign = ""): PlotHelp | null {
   // Map ordinal goals to their equivalent continuous plot
   const effectiveGoal = goal === "ordinal_groups" ? "groups"
     : goal === "ordinal_relationship" ? "relationship"
@@ -755,6 +917,37 @@ function plotRecommendation(goal: Goal, pairing: Pairing, categoryMode: Category
     : goal === "ordinal_reference" ? "one_sample"
     : goal;
   if (effectiveGoal === "one_sample") {
+    if (referenceDesign === "multiple_two_factors") {
+      return {
+        title: "Recommended plot: Grouped dot plot with a reference line",
+        text: "Because you are testing several combinations against the same reference value, show the outcome for each combination of the two grouping variables. Add a horizontal reference line at the reference value, such as zero.",
+        note: "Figure tip: show individual data points with mean and SD bars.",
+        prism: [
+          "Click New Table & Graph.",
+          "Select Grouped.",
+          "Put one grouping variable in the rows and the other in the columns.",
+          "Enter replicate values in side-by-side subcolumns.",
+          "Go to Graph: Data 1 and choose a grouped dot plot showing individual points with Mean and SD.",
+          "Add a horizontal reference line at the hypothesized value, such as 0.",
+        ],
+      };
+    }
+    if (referenceDesign === "multiple_one_factor" || referenceDesign === "multiple_matched") {
+      return {
+        title: "Recommended plot: Dot-Bar Plot with a reference line",
+        text: "Because you are testing several groups or conditions against the same reference value, display each group or condition as its own column. Add a horizontal reference line at the reference value, such as zero.",
+        note: referenceDesign === "multiple_matched" ? "Important: preserve the matching across rows because the same sample appears in more than one condition." : "Each group or condition should have its own column.",
+        prism: [
+          "Click New Table & Graph.",
+          "Select Column.",
+          "Choose Enter or import data into a new table.",
+          referenceDesign === "multiple_matched" ? "Choose Enter paired or repeated values into rows." : "Choose Enter replicate values, stacked into columns.",
+          "Enter one group or condition name at the top of each column.",
+          "Go to Graph: Data 1 and choose the option for individual data points with Mean and SD.",
+          "Add a horizontal reference line at the hypothesized value, such as 0.",
+        ],
+      };
+    }
     return {
       title: "Recommended plot: Dot-Bar Plot (single group)",
       text: "Because you are testing one set of measurements against a fixed reference value, display all your data points in a single column with a mean and SD bar. Add a horizontal reference line at the hypothesized value (e.g. zero) so readers can visually judge how far your data are from it.",
@@ -957,7 +1150,7 @@ export default function App() {
   };
 
   const updateAnswers = (patch: Partial<Answers>) => {
-    const changesAffectingRecommendedTest = ["dataType", "goal", "shape", "relationshipMode", "categoryMode", "ivGroups", "numFactors", "pairing"].some((key) =>
+    const changesAffectingRecommendedTest = ["dataType", "goal", "shape", "relationshipMode", "categoryMode", "ivGroups", "numFactors", "referenceDesign", "pairing"].some((key) =>
       Object.prototype.hasOwnProperty.call(patch, key)
     );
     const isSoftwareOnly = Object.keys(patch).length === 1 && Object.prototype.hasOwnProperty.call(patch, "software");
@@ -973,6 +1166,7 @@ export default function App() {
         next.categoryMode = "";
         next.ivGroups = "";
         next.numFactors = "";
+        next.referenceDesign = "";
         next.pairing = "";
         next.needsPairwise = "";
         next.pairwiseType = "";
@@ -988,6 +1182,7 @@ export default function App() {
         }
         next.ivGroups = "";
         next.numFactors = "";
+        next.referenceDesign = "";
         next.pairing = "";
         next.needsPairwise = "";
         next.pairwiseType = "";
@@ -1011,6 +1206,10 @@ export default function App() {
       }
 
       if (Object.prototype.hasOwnProperty.call(patch, "categoryMode")) {
+        next.software = "";
+      }
+
+      if (Object.prototype.hasOwnProperty.call(patch, "referenceDesign")) {
         next.software = "";
       }
 
@@ -1051,7 +1250,7 @@ export default function App() {
     });
   };
 
-  const plot = useMemo(() => plotRecommendation(answers.goal, answers.pairing, answers.categoryMode, answers.numFactors), [answers.goal, answers.pairing, answers.categoryMode, answers.numFactors]);
+  const plot = useMemo(() => plotRecommendation(answers.goal, answers.pairing, answers.categoryMode, answers.numFactors, answers.referenceDesign), [answers.goal, answers.pairing, answers.categoryMode, answers.numFactors, answers.referenceDesign]);
   const resultKey = useMemo(() => decisionEngine(answers), [answers]);
   const result = resultKey ? TESTS[resultKey] : null;
   const postHoc = postHocRecommendation(resultKey, answers.pairwiseType);
@@ -1099,7 +1298,7 @@ export default function App() {
             <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">
               <strong>Do you have any similar research questions in the same experiment?</strong>
               <p className="mt-1 text-slate-600">
-                Similar questions are questions that feel like they belong to the same experiment. The goal here is to decide whether they should be handled together as one analysis, or kept separate. Do not worry about the name of the statistical test yet — the app will teach that later.
+                Similar questions are questions that feel like they belong to the same experiment. This step helps you decide whether they should be handled together as one analysis, or kept separate.
               </p>
               <div className="mt-3 grid grid-cols-2 gap-3">
                 <ButtonChoice selected={answers.multipleTests === "no"} onClick={() => updateAnswers({ multipleTests: "no", similarQuestions: "", similarQuestionChecks: [], similarQuestionsDecision: "", numTests: "" })}>
@@ -1127,34 +1326,78 @@ export default function App() {
                   <div className="rounded bg-white p-3">
                     <strong>Check any statements that are true.</strong>
                     <p className="mt-1 text-slate-600">
-                      The app will use your checked statements to recommend whether the questions should be handled together or separately.
+                      Work through each pair. The app will use your answers to recommend whether the questions should be handled together or separately.
                     </p>
-                    <div className="mt-3 space-y-2">
+                    <div className="mt-3 space-y-3">
                       {[
-                        ["same_outcome", "The questions measure the same outcome variable, or the same kind of outcome variable."],
-                        ["same_experiment", "The questions come from the same experiment or dataset."],
-                        ["one_changed_variable", "The questions mostly differ by one added group, treatment, dose, species, sex, or time point."],
-                        ["same_samples_or_matched", "The same samples, animals, or people appear in more than one condition or time point."],
-                        ["effect_changes_across_group", "I want to know whether the pattern changes depending on another grouping variable, such as whether a treatment effect differs between males and females."],
-                        ["different_outcomes", "The questions use clearly different outcome variables that would need to be explained separately."],
-                        ["different_designs", "The questions come from different experimental designs."],
-                        ["unrelated_data", "The questions use unrelated datasets or answer genuinely different biological questions."],
-                      ].map(([value, label]) => (
-                        <label key={value} className="flex gap-2 rounded border border-slate-200 bg-slate-50 p-3">
-                          <input
-                            type="checkbox"
-                            checked={answers.similarQuestionChecks.includes(value as SimilarQuestionCheck)}
-                            onChange={() => toggleSimilarQuestionCheck(value as SimilarQuestionCheck)}
-                          />
-                          <span>{label}</span>
-                        </label>
+                        {
+                          heading: "Outcome variable",
+                          options: [
+                            ["same_outcome", "Same outcome: the questions measure the same response variable, such as oxidation rate, heart rate, enzyme activity, or body mass."],
+                            ["different_outcomes", "Different outcomes: the questions measure clearly different response variables that would need to be explained separately."],
+                          ],
+                        },
+                        {
+                          heading: "Experimental design",
+                          options: [
+                            ["same_experiment", "Same experiment/design: the questions come from the same dataset and were collected using the same basic design."],
+                            ["different_designs", "Different designs: the questions come from different experiments or use different sampling structures."],
+                          ],
+                        },
+                        {
+                          heading: "What changes between the questions?",
+                          options: [
+                            ["one_changed_variable", "One thing changes: the questions mostly differ by one group, treatment, dose, species, sex, time point, or substrate."],
+                            ["unrelated_data", "Many things change: the questions use unrelated datasets or answer genuinely different biological questions."],
+                          ],
+                        },
+                        {
+                          heading: "Repeated or matched measurements",
+                          options: [
+                            ["same_samples_or_matched", "The same samples, animals, people, or matched class datasets appear in more than one condition or time point."],
+                          ],
+                        },
+                        {
+                          heading: "Reference value",
+                          options: [
+                            ["same_reference", "The questions compare the same outcome against the same reference value, such as asking whether oxidation is greater than zero in multiple substrates."],
+                          ],
+                        },
+                        {
+                          heading: "Pattern across another variable",
+                          options: [
+                            ["effect_changes_across_group", "I want to know whether the pattern changes depending on another grouping variable, such as whether a treatment effect differs between males and females."],
+                          ],
+                        },
+                      ].map((section) => (
+                        <div key={section.heading} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                          <div className="mb-2 font-semibold text-slate-900">{section.heading}</div>
+                          <div className={`grid gap-2 ${section.options.length === 2 ? "md:grid-cols-2" : ""}`}>
+                            {section.options.map(([value, label]) => (
+                              <label key={value} className="flex gap-2 rounded border border-slate-200 bg-white p-3">
+                                <input
+                                  type="checkbox"
+                                  checked={answers.similarQuestionChecks.includes(value as SimilarQuestionCheck)}
+                                  onChange={() => toggleSimilarQuestionCheck(value as SimilarQuestionCheck)}
+                                />
+                                <span>{label}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
                       ))}
                     </div>
                   </div>
 
+                  {answers.similarQuestionChecks.includes("same_reference") && (
+                    <div className="rounded bg-blue-50 p-3 text-sm text-slate-900">
+                      <strong>Reference-value note:</strong> When the same outcome is compared against the same reference value in several related conditions, treat the condition itself as part of the design. For example, instead of asking separately whether yeast oxidized glucose and whether yeast oxidized stevia, frame the analysis around oxidation across substrate conditions, with zero oxidation as the reference point.
+                    </div>
+                  )}
+
                   {answers.similarQuestionsDecision === "single" && (
                     <div className="rounded bg-blue-700 p-3 text-white">
-                      <strong>Recommendation: handle these together as one analysis.</strong> The questions look like parts of the same overall design. Keeping them together usually gives a stronger analysis than splitting them into many smaller questions.
+                      <strong>Recommendation: handle these together as one analysis.</strong> The questions look like parts of the same overall design. This usually gives a clearer and more powerful analysis than splitting the same design into many smaller questions.
                     </div>
                   )}
 
@@ -1306,7 +1549,36 @@ export default function App() {
               </>
             )}
 
-            {((answers.goal === "groups" && answers.pairing && (answers.pairing === "mixed" || answers.pairing !== "independent" || answers.ivGroups !== "3plus" || answers.numFactors)) || (answers.goal === "ordinal_groups" && answers.pairing && (answers.pairing === "mixed" || answers.pairing !== "independent" || answers.ivGroups !== "3plus" || answers.numFactors)) || answers.goal === "relationship" || answers.goal === "ordinal_relationship" || answers.goal === "linear_model" || answers.goal === "ordinal_model" || answers.goal === "one_sample" || answers.goal === "ordinal_reference" || (answers.goal === "categories" && answers.categoryMode)) && plot && (
+            {answers.goal === "one_sample" && (
+              <>
+                <div className="my-4 border-t border-slate-200" />
+                <div className="mb-3 flex items-center gap-2">
+                  <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-bold text-white">2c</span>
+                  <span className="font-semibold">How many things are you comparing with the reference value?</span>
+                </div>
+                <p className="mb-3 text-sm text-slate-600">Use this when your reference value is something like zero oxidation, zero change, or a known expected value.</p>
+                <div className="grid gap-3 text-sm">
+                  <ButtonChoice selected={answers.referenceDesign === "single"} onClick={() => updateAnswers({ referenceDesign: "single" })}>
+                    <strong>One set of measurements</strong>
+                    <p>Example: one group of measurements tested against zero.</p>
+                  </ButtonChoice>
+                  <ButtonChoice selected={answers.referenceDesign === "multiple_one_factor"} onClick={() => updateAnswers({ referenceDesign: "multiple_one_factor" })}>
+                    <strong>Several groups or conditions, organized by one variable</strong>
+                    <p>Example: yeast oxidation measured for glucose, stevia, and sucrose, all compared with zero.</p>
+                  </ButtonChoice>
+                  <ButtonChoice selected={answers.referenceDesign === "multiple_two_factors"} onClick={() => updateAnswers({ referenceDesign: "multiple_two_factors" })}>
+                    <strong>Several combinations, organized by two variables</strong>
+                    <p>Example: two yeast strains tested with glucose and stevia, with each strain-substrate combination compared with zero.</p>
+                  </ButtonChoice>
+                  <ButtonChoice selected={answers.referenceDesign === "multiple_matched"} onClick={() => updateAnswers({ referenceDesign: "multiple_matched" })}>
+                    <strong>The same samples were tested in several conditions</strong>
+                    <p>Example: the same yeast preparation was tested with glucose and stevia, so the measurements are linked.</p>
+                  </ButtonChoice>
+                </div>
+              </>
+            )}
+
+            {((answers.goal === "groups" && answers.pairing && (answers.pairing === "mixed" || answers.pairing !== "independent" || answers.ivGroups !== "3plus" || answers.numFactors)) || (answers.goal === "ordinal_groups" && answers.pairing && (answers.pairing === "mixed" || answers.pairing !== "independent" || answers.ivGroups !== "3plus" || answers.numFactors)) || answers.goal === "relationship" || answers.goal === "ordinal_relationship" || answers.goal === "linear_model" || answers.goal === "ordinal_model" || (answers.goal === "one_sample" && answers.referenceDesign) || answers.goal === "ordinal_reference" || (answers.goal === "categories" && answers.categoryMode)) && plot && (
               <>
                 <div className="my-4 border-t border-slate-200" />
                 <div className="mb-3 flex items-center gap-2">
@@ -1382,7 +1654,7 @@ export default function App() {
           </Panel>
         )}
 
-        {((answers.goal === "groups" && answers.pairing) || answers.goal === "relationship" || answers.goal === "one_sample") && (
+        {((answers.goal === "groups" && answers.pairing) || answers.goal === "relationship" || (answers.goal === "one_sample" && answers.referenceDesign)) && (
           <Panel title="Step 3: After making your plot, what does the data distribution or pattern look like?">
             {(answers.goal === "groups" || answers.goal === "one_sample") && (
               <div className="grid gap-3 text-sm md:grid-cols-3">
@@ -1501,6 +1773,11 @@ export default function App() {
             {(answers.goal === "ordinal_groups" || answers.goal === "ordinal_relationship" || answers.goal === "ordinal_reference") && (
               <div className="mb-4 rounded bg-blue-50 p-3 text-sm">
                 <strong>Non-parametric test selected automatically:</strong> Because your outcome is an ordinal rating scale, a non-parametric test is used — it works on the ranked order of the scores rather than their exact values, which is appropriate when equal spacing between scale points cannot be assumed.
+              </div>
+            )}
+            {(resultKey === "one_factor_reference_model" || resultKey === "two_factor_reference_model" || resultKey === "repeated_reference_model") && (
+              <div className="mb-4 rounded bg-blue-50 p-3 text-sm">
+                <strong>Reference-value design selected:</strong> The app is keeping these comparisons together because they share one outcome variable and one reference value. The conditions are treated as part of the design rather than as unrelated separate tests.
               </div>
             )}
             {resultKey === "advanced_nonparametric_model" && (
