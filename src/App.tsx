@@ -7,6 +7,7 @@ type IvGroups = "" | "2" | "3plus";
 type NumFactors = "" | "one" | "two";
 type Pairing = "" | "independent" | "paired" | "one_sample" | "mixed";
 type YesNo = "" | "yes" | "no";
+type SimilarQuestionsDecision = "" | "single" | "separate" | "ask_ta";
 type PairwiseType = "" | "allpairs" | "vscontrol" | "planned";
 type Software = "" | "prism" | "r";
 
@@ -18,6 +19,8 @@ type Answers = {
   question: string;
   questionSubmitted: boolean;
   multipleTests: YesNo;
+  similarQuestions: string;
+  similarQuestionsDecision: SimilarQuestionsDecision;
   numTests: string;
   dataType: DataType;
   goal: Goal;
@@ -51,7 +54,8 @@ type TestKey =
   | "one_sample_t"
   | "one_sample_wilcoxon"
   | "two_way_anova"
-  | "mixed_anova";
+  | "mixed_anova"
+  | "advanced_nonparametric_model";
 
 type TestDef = {
   title: string;
@@ -447,6 +451,53 @@ summary(model)
 emm <- emmeans(model, ~ condition | group)
 pairs(emm, adjust = "tukey")`,
   },
+  advanced_nonparametric_model: {
+    title: "Advanced non-parametric / robust model needed",
+    when: "Your design has either two categorical factors or a mixed independent/repeated structure, but the data are skewed or outlier-heavy. A standard two-way ANOVA or mixed ANOVA would conflict with the earlier decision to use a non-parametric approach.",
+    assumptions: [
+      "I have a continuous outcome variable",
+      "The design is more complex than a simple two-group or one-factor comparison",
+      "The data are skewed or include influential outliers",
+      "I will not ignore or delete outliers unless there is clear evidence of a data-entry or measurement error",
+    ],
+    prism: [
+      "GraphPad Prism is not a good starting point for this design once the data are outlier-heavy or strongly non-normal.",
+      "Do not switch back to a regular two-way ANOVA just because the design has two factors.",
+      "Ask your TA or instructor whether the course expects a simplified analysis, a data transformation, or an R-based robust/non-parametric model.",
+      "As a sensitivity check, compare the conclusion with and without the outlier, but do not delete the outlier from the final analysis unless there is clear evidence it is an error.",
+    ],
+    rSteps: [
+      "Create a long-format data frame with one row per observation.",
+      "First run the planned model using the full dataset.",
+      "Then repeat the analysis without the outlier only as a sensitivity check.",
+      "If the conclusion changes, report that the result is sensitive to an outlier and ask for instructor guidance before making a strong claim.",
+    ],
+    rCode: `# This is a sensitivity-check template, not a one-size-fits-all test.
+# Replace variable names with your own.
+
+df <- data.frame(
+  outcome = c(12.1, 11.8, 13.0, 30.5, 10.9, 11.4),
+  factor1 = c("A", "A", "B", "B", "A", "B"),
+  factor2 = c("X", "Y", "X", "Y", "X", "Y"),
+  subject = c(1, 2, 3, 4, 5, 6)
+)
+
+# 1. Plot the full dataset and identify the possible outlier.
+boxplot(outcome ~ factor1 * factor2, data = df)
+
+# 2. Run the full planned analysis first.
+full_model <- lm(outcome ~ factor1 * factor2, data = df)
+summary(full_model)
+
+# 3. Sensitivity check only: repeat after excluding the possible outlier.
+# Change this rule to match your actual outlier.
+df_without_outlier <- subset(df, outcome < 30)
+sensitivity_model <- lm(outcome ~ factor1 * factor2, data = df_without_outlier)
+summary(sensitivity_model)
+
+# If the conclusion changes, report that the result is outlier-sensitive.`,
+  },
+
   one_sample_t: {
     title: "One-sample t test",
     when: "Test whether the mean of your measurements is significantly different from a specific expected or hypothesized value (such as zero, or a known population mean).",
@@ -561,6 +612,8 @@ const INITIAL_ANSWERS: Answers = {
   question: "",
   questionSubmitted: false,
   multipleTests: "",
+  similarQuestions: "",
+  similarQuestionsDecision: "",
   numTests: "",
   dataType: "",
   goal: "",
@@ -589,12 +642,13 @@ function decisionEngine(a: Answers): TestKey | null {
   if (a.goal === "ordinal_relationship") return "spearman";
   if (a.goal === "ordinal_model") return "linear_model"; // pragmatic choice flagged in assumptions
   if (a.goal === "ordinal_groups") {
-    if (!a.pairing || !a.ivGroups) return null;
-    if (a.pairing === "mixed") return "mixed_anova"; // best available
+    if (!a.pairing) return null;
+    if (a.pairing === "mixed") return "advanced_nonparametric_model";
+    if (!a.ivGroups) return null;
     if (a.ivGroups === "2" && a.pairing === "independent") return "mann_whitney";
     if (a.ivGroups === "2" && a.pairing === "paired") return "wilcoxon";
     if (a.ivGroups === "3plus" && a.pairing === "independent") {
-      if (a.numFactors === "two") return "two_way_anova";
+      if (a.numFactors === "two") return "advanced_nonparametric_model";
       if (!a.numFactors) return null;
       return "kruskal";
     }
@@ -603,12 +657,15 @@ function decisionEngine(a: Answers): TestKey | null {
 
   if (a.goal === "groups") {
     if (a.pairing === "one_sample") return a.shape ? "one_sample_t" : null;
-    if (a.pairing === "mixed") return a.shape ? "mixed_anova" : null;
+    if (a.pairing === "mixed") {
+      if (!a.shape) return null;
+      return nonParametric ? "advanced_nonparametric_model" : "mixed_anova";
+    }
     if (!a.ivGroups || !a.pairing || !a.shape) return null;
     if (a.ivGroups === "2" && a.pairing === "independent") return nonParametric ? "mann_whitney" : "unpaired_t";
     if (a.ivGroups === "2" && a.pairing === "paired") return nonParametric ? "wilcoxon" : "paired_t";
     if (a.ivGroups === "3plus" && a.pairing === "independent") {
-      if (a.numFactors === "two") return "two_way_anova";
+      if (a.numFactors === "two") return nonParametric ? "advanced_nonparametric_model" : "two_way_anova";
       if (!a.numFactors) return null;
       return nonParametric ? "kruskal" : "anova";
     }
@@ -976,7 +1033,7 @@ export default function App() {
             className="w-full rounded border p-3"
             placeholder="Example: Does temperature affect oxygen consumption in crayfish?"
             value={answers.question}
-            onChange={(e) => setAnswers((prev) => ({ ...prev, question: e.target.value, questionSubmitted: false }))}
+            onChange={(e) => setAnswers({ ...INITIAL_ANSWERS, question: e.target.value })}
           />
           <button
             type="button"
@@ -990,36 +1047,93 @@ export default function App() {
 
           {answers.questionSubmitted && (
             <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">
-              <strong>Are you running other related statistical tests as part of the same experiment?</strong>
-              <p className="mt-1 text-slate-600">A related test asks essentially the <em>same question</em> but with one thing changed — for example, testing whether temperature affects metabolic rate in species A, and then asking the same question for species B; or comparing body mass between two groups, and then separately comparing limb length between the same groups. If your other research questions are quite different from this one — different outcome variables, different designs, or different biological questions — answer No.</p>
+              <strong>Do you have any similar research questions in the same experiment?</strong>
+              <p className="mt-1 text-slate-600">
+                Similar questions use the same overall design but change one variable, group, time point, species, or outcome. Before running separate tests, check whether the questions can be answered in a single statistical test. A single well-chosen test is usually more powerful and avoids unnecessary multiple-comparisons penalties.
+              </p>
               <div className="mt-3 grid grid-cols-2 gap-3">
-                <ButtonChoice selected={answers.multipleTests === "no"} onClick={() => updateAnswers({ multipleTests: "no", numTests: "" })}>
+                <ButtonChoice selected={answers.multipleTests === "no"} onClick={() => updateAnswers({ multipleTests: "no", similarQuestions: "", similarQuestionsDecision: "", numTests: "" })}>
                   <strong>No</strong>
-                  <p>I am running only this one statistical test</p>
+                  <p>I only have this one research question</p>
                 </ButtonChoice>
-                <ButtonChoice selected={answers.multipleTests === "yes"} onClick={() => updateAnswers({ multipleTests: "yes" })}>
+                <ButtonChoice selected={answers.multipleTests === "yes"} onClick={() => updateAnswers({ multipleTests: "yes", similarQuestionsDecision: "", numTests: "" })}>
                   <strong>Yes</strong>
-                  <p>I am running multiple related statistical tests</p>
+                  <p>I have similar questions that might belong together</p>
                 </ButtonChoice>
               </div>
+
               {answers.multipleTests === "yes" && (
-                <div className="mt-3">
-                  <label className="block font-semibold">How many tests in total are you running?</label>
-                  <input
-                    type="number"
-                    min={2}
-                    className="mt-1 w-32 rounded border p-2"
-                    placeholder="e.g. 6"
-                    value={answers.numTests}
-                    onChange={(e) => updateAnswers({ numTests: e.target.value })}
-                  />
+                <div className="mt-4 space-y-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                  <div>
+                    <label className="block font-semibold">List the similar questions briefly.</label>
+                    <textarea
+                      className="mt-1 w-full rounded border p-2"
+                      placeholder="Example: Does temperature affect oxygen consumption in males? Does temperature affect oxygen consumption in females?"
+                      value={answers.similarQuestions}
+                      onChange={(e) => updateAnswers({ similarQuestions: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="rounded bg-white p-3">
+                    <strong>Could these be one stronger analysis?</strong>
+                    <ul className="mt-2 space-y-1 text-slate-700">
+                      <li>• If the questions compare the same outcome across several groups, treatments, species, doses, or time points, they often belong in one t test, ANOVA, Kruskal-Wallis, repeated-measures ANOVA, or Friedman test.</li>
+                      <li>• If there are two categorical explanatory variables, such as treatment and sex, they may belong in one two-way design rather than many separate tests.</li>
+                      <li>• If the questions use different outcome variables or genuinely different biological hypotheses, they may need separate tests.</li>
+                    </ul>
+                  </div>
+
+                  <div>
+                    <strong>After this check, how should you proceed?</strong>
+                    <div className="mt-2 grid gap-3">
+                      <ButtonChoice selected={answers.similarQuestionsDecision === "single"} onClick={() => updateAnswers({ similarQuestionsDecision: "single", numTests: "" })}>
+                        <strong>Use one combined statistical test</strong>
+                        <p>These questions are really parts of one analysis</p>
+                      </ButtonChoice>
+                      <ButtonChoice selected={answers.similarQuestionsDecision === "separate"} onClick={() => updateAnswers({ similarQuestionsDecision: "separate" })}>
+                        <strong>Use separate statistical tests</strong>
+                        <p>The questions are similar, but they cannot be answered cleanly in one test</p>
+                      </ButtonChoice>
+                      <ButtonChoice selected={answers.similarQuestionsDecision === "ask_ta"} onClick={() => updateAnswers({ similarQuestionsDecision: "ask_ta", numTests: "" })}>
+                        <strong>I am not sure</strong>
+                        <p>Ask a TA or instructor before choosing the analysis</p>
+                      </ButtonChoice>
+                    </div>
+                  </div>
+
+                  {answers.similarQuestionsDecision === "single" && (
+                    <div className="rounded bg-blue-700 p-3 text-white">
+                      <strong>Proceed as one analysis:</strong> enter all relevant groups, conditions, factors, or time points into the same dataset and let the app guide you to the appropriate single test.
+                    </div>
+                  )}
+
+                  {answers.similarQuestionsDecision === "separate" && (
+                    <div>
+                      <label className="block font-semibold">How many separate tests will you run in total?</label>
+                      <input
+                        type="number"
+                        min={2}
+                        className="mt-1 w-32 rounded border p-2"
+                        placeholder="e.g. 6"
+                        value={answers.numTests}
+                        onChange={(e) => updateAnswers({ numTests: e.target.value })}
+                      />
+                      <p className="mt-1 text-xs text-slate-600">This number is used later for the Bonferroni correction.</p>
+                    </div>
+                  )}
+
+                  {answers.similarQuestionsDecision === "ask_ta" && (
+                    <div className="rounded bg-slate-700 p-3 text-white">
+                      Ask for help before continuing. Choosing separate tests when one combined test is possible can make the analysis weaker and harder to interpret.
+                    </div>
+                  )}
                 </div>
               )}
             </div>
           )}
         </Panel>
 
-        {answers.questionSubmitted && (answers.multipleTests === "no" || (answers.multipleTests === "yes" && answers.numTests)) && (
+        {answers.questionSubmitted && (answers.multipleTests === "no" || (answers.multipleTests === "yes" && (answers.similarQuestionsDecision === "single" || (answers.similarQuestionsDecision === "separate" && answers.numTests)))) && (
           <Panel title="Step 2: Understand your data">
 
             {/* ── Step 2a: Variable type ── */}
@@ -1212,7 +1326,7 @@ export default function App() {
           </Panel>
         )}
 
-        {((answers.goal === "groups" && answers.pairing && answers.pairing !== "mixed") || answers.goal === "relationship" || answers.goal === "one_sample") && (
+        {((answers.goal === "groups" && answers.pairing) || answers.goal === "relationship" || answers.goal === "one_sample") && (
           <Panel title="Step 3: After making your plot, what does the data distribution or pattern look like?">
             {(answers.goal === "groups" || answers.goal === "one_sample") && (
               <div className="grid gap-3 text-sm md:grid-cols-3">
@@ -1254,6 +1368,11 @@ export default function App() {
                 {(answers.shape === "skewed" || answers.shape === "outliers" || answers.shape === "nonlinear") && (
                   <div className="rounded bg-blue-700 p-3 text-white">
                     <strong>Non-parametric tests recommended</strong>
+                  </div>
+                )}
+                {answers.shape === "outliers" && (
+                  <div className="mt-3 rounded bg-amber-50 p-4 text-sm ring-2 ring-amber-300">
+                    <strong>How to think about the outlier:</strong> An outlier can sometimes be a data-entry or measurement error. However, in this course the dataset has been vetted by the TAs, so do not delete the value just because it is inconvenient. Instead, treat it as a real observation and ask whether it is strongly influencing the statistical conclusion. A good sensitivity check is to compare the conclusion with and without the outlier and report if the conclusion changes.
                   </div>
                 )}
               </div>
@@ -1326,6 +1445,11 @@ export default function App() {
             {(answers.goal === "ordinal_groups" || answers.goal === "ordinal_relationship" || answers.goal === "ordinal_reference") && (
               <div className="mb-4 rounded bg-blue-50 p-3 text-sm">
                 <strong>Non-parametric test selected automatically:</strong> Because your outcome is an ordinal rating scale, a non-parametric test is used — it works on the ranked order of the scores rather than their exact values, which is appropriate when equal spacing between scale points cannot be assumed.
+              </div>
+            )}
+            {resultKey === "advanced_nonparametric_model" && (
+              <div className="mb-4 rounded bg-red-50 p-3 text-sm ring-2 ring-red-300">
+                <strong>Do not switch back to ANOVA here:</strong> Your earlier choices indicate that a regular two-way ANOVA or mixed ANOVA is not appropriate without extra guidance. This is exactly the situation where the app should stop students from automatically returning to a parametric ANOVA.
               </div>
             )}
             <strong>Verify assumptions before proceeding:</strong>
@@ -1527,10 +1651,10 @@ pairwise.wilcox.test(df$outcome, df$condition,
           (answers.anovaSignificant === "yes" && answers.needsPairwise === "yes" && answers.pairwiseType)
         ) && (
           <Panel title={`Step ${supportsPairwise ? "9" : "8"}: Annotate your figure with the result`}>
-            {answers.multipleTests === "yes" && answers.numTests && Number(answers.numTests) >= 2 && (
+            {answers.multipleTests === "yes" && answers.similarQuestionsDecision === "separate" && answers.numTests && Number(answers.numTests) >= 2 && (
               <div className="mb-4 rounded bg-red-50 p-4 text-sm ring-2 ring-red-300">
                 <strong>⚠ Multiple comparisons correction required</strong>
-                <p className="mt-1">Because you are running <strong>{answers.numTests} related tests</strong> in this experiment, there is an elevated risk of a false positive result by chance alone. You must apply a <strong>Bonferroni correction</strong>.</p>
+                <p className="mt-1">Because you are running <strong>{answers.numTests} separate tests</strong> in this experiment, there is an elevated risk of a false positive result by chance alone. You must apply a <strong>Bonferroni correction</strong>.</p>
                 <p className="mt-2">Your corrected significance threshold is:</p>
                 <p className="mt-1 text-center text-lg font-bold">α = 0.05 ÷ {answers.numTests} = {(0.05 / Number(answers.numTests)).toFixed(4)}</p>
                 <p className="mt-2">A result is only statistically significant if <strong>p &lt; {(0.05 / Number(answers.numTests)).toFixed(4)}</strong>. Do not use p &lt; 0.05 as your threshold for any of these tests.</p>
@@ -1540,7 +1664,7 @@ pairwise.wilcox.test(df$outcome, df$condition,
             <div className="rounded bg-amber-50 p-3 text-sm">
               <strong>Showing the result on your figure:</strong>
               {(() => {
-                const bonferroni = answers.multipleTests === "yes" && Number(answers.numTests) >= 2;
+                const bonferroni = answers.multipleTests === "yes" && answers.similarQuestionsDecision === "separate" && Number(answers.numTests) >= 2;
                 const n = Number(answers.numTests);
                 const alpha = bonferroni ? 0.05 / n : 0.05;
                 const star1 = alpha.toFixed(4);
