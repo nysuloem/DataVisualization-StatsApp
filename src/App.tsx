@@ -8,6 +8,15 @@ type NumFactors = "" | "one" | "two";
 type Pairing = "" | "independent" | "paired" | "one_sample" | "mixed";
 type YesNo = "" | "yes" | "no";
 type SimilarQuestionsDecision = "" | "single" | "separate" | "ask_ta";
+type SimilarQuestionCheck =
+  | "same_outcome"
+  | "same_experiment"
+  | "one_changed_variable"
+  | "same_samples_or_matched"
+  | "effect_changes_across_group"
+  | "different_outcomes"
+  | "different_designs"
+  | "unrelated_data";
 type PairwiseType = "" | "allpairs" | "vscontrol" | "planned";
 type Software = "" | "prism" | "r";
 
@@ -20,6 +29,7 @@ type Answers = {
   questionSubmitted: boolean;
   multipleTests: YesNo;
   similarQuestions: string;
+  similarQuestionChecks: SimilarQuestionCheck[];
   similarQuestionsDecision: SimilarQuestionsDecision;
   numTests: string;
   dataType: DataType;
@@ -613,6 +623,7 @@ const INITIAL_ANSWERS: Answers = {
   questionSubmitted: false,
   multipleTests: "",
   similarQuestions: "",
+  similarQuestionChecks: [],
   similarQuestionsDecision: "",
   numTests: "",
   dataType: "",
@@ -628,6 +639,30 @@ const INITIAL_ANSWERS: Answers = {
   anovaSignificant: "",
   software: "",
 };
+
+const COMBINE_SUPPORTING_CHECKS: SimilarQuestionCheck[] = [
+  "same_outcome",
+  "same_experiment",
+  "one_changed_variable",
+  "same_samples_or_matched",
+  "effect_changes_across_group",
+];
+
+const SEPARATE_SUPPORTING_CHECKS: SimilarQuestionCheck[] = [
+  "different_outcomes",
+  "different_designs",
+  "unrelated_data",
+];
+
+function similarQuestionsRecommendation(checks: SimilarQuestionCheck[]): SimilarQuestionsDecision {
+  const hasSeparateSignal = SEPARATE_SUPPORTING_CHECKS.some((check) => checks.includes(check));
+  const combineScore = COMBINE_SUPPORTING_CHECKS.filter((check) => checks.includes(check)).length;
+
+  if (hasSeparateSignal) return "separate";
+  if (combineScore >= 2) return "single";
+  if (checks.length > 0) return "ask_ta";
+  return "";
+}
 
 function decisionEngine(a: Answers): TestKey | null {
   const nonParametric = a.shape === "skewed" || a.shape === "outliers" || a.shape === "nonlinear";
@@ -906,6 +941,21 @@ export default function App() {
   const [showPlotHelp, setShowPlotHelp] = useState(false);
   const [showPlotHelp2, setShowPlotHelp2] = useState(false);
 
+  const toggleSimilarQuestionCheck = (check: SimilarQuestionCheck) => {
+    setAnswers((prev) => {
+      const similarQuestionChecks = prev.similarQuestionChecks.includes(check)
+        ? prev.similarQuestionChecks.filter((item) => item !== check)
+        : [...prev.similarQuestionChecks, check];
+      const similarQuestionsDecision = similarQuestionsRecommendation(similarQuestionChecks);
+      return {
+        ...prev,
+        similarQuestionChecks,
+        similarQuestionsDecision,
+        numTests: similarQuestionsDecision === "separate" ? prev.numTests : "",
+      };
+    });
+  };
+
   const updateAnswers = (patch: Partial<Answers>) => {
     const changesAffectingRecommendedTest = ["dataType", "goal", "shape", "relationshipMode", "categoryMode", "ivGroups", "numFactors", "pairing"].some((key) =>
       Object.prototype.hasOwnProperty.call(patch, key)
@@ -1049,14 +1099,14 @@ export default function App() {
             <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">
               <strong>Do you have any similar research questions in the same experiment?</strong>
               <p className="mt-1 text-slate-600">
-                Similar questions use the same overall design but change one variable, group, time point, species, or outcome. Before running separate tests, check whether the questions can be answered in a single statistical test. A single well-chosen test is usually more powerful and avoids unnecessary multiple-comparisons penalties.
+                Similar questions are questions that feel like they belong to the same experiment. The goal here is to decide whether they should be handled together as one analysis, or kept separate. Do not worry about the name of the statistical test yet — the app will teach that later.
               </p>
               <div className="mt-3 grid grid-cols-2 gap-3">
-                <ButtonChoice selected={answers.multipleTests === "no"} onClick={() => updateAnswers({ multipleTests: "no", similarQuestions: "", similarQuestionsDecision: "", numTests: "" })}>
+                <ButtonChoice selected={answers.multipleTests === "no"} onClick={() => updateAnswers({ multipleTests: "no", similarQuestions: "", similarQuestionChecks: [], similarQuestionsDecision: "", numTests: "" })}>
                   <strong>No</strong>
                   <p>I only have this one research question</p>
                 </ButtonChoice>
-                <ButtonChoice selected={answers.multipleTests === "yes"} onClick={() => updateAnswers({ multipleTests: "yes", similarQuestionsDecision: "", numTests: "" })}>
+                <ButtonChoice selected={answers.multipleTests === "yes"} onClick={() => updateAnswers({ multipleTests: "yes", similarQuestionChecks: [], similarQuestionsDecision: "", numTests: "" })}>
                   <strong>Yes</strong>
                   <p>I have similar questions that might belong together</p>
                 </ButtonChoice>
@@ -1075,56 +1125,62 @@ export default function App() {
                   </div>
 
                   <div className="rounded bg-white p-3">
-                    <strong>Could these be one stronger analysis?</strong>
-                    <ul className="mt-2 space-y-1 text-slate-700">
-                      <li>• If the questions compare the same outcome across several groups, treatments, species, doses, or time points, they often belong in one t test, ANOVA, Kruskal-Wallis, repeated-measures ANOVA, or Friedman test.</li>
-                      <li>• If there are two categorical explanatory variables, such as treatment and sex, they may belong in one two-way design rather than many separate tests.</li>
-                      <li>• If the questions use different outcome variables or genuinely different biological hypotheses, they may need separate tests.</li>
-                    </ul>
-                  </div>
-
-                  <div>
-                    <strong>After this check, how should you proceed?</strong>
-                    <div className="mt-2 grid gap-3">
-                      <ButtonChoice selected={answers.similarQuestionsDecision === "single"} onClick={() => updateAnswers({ similarQuestionsDecision: "single", numTests: "" })}>
-                        <strong>Use one combined statistical test</strong>
-                        <p>These questions are really parts of one analysis</p>
-                      </ButtonChoice>
-                      <ButtonChoice selected={answers.similarQuestionsDecision === "separate"} onClick={() => updateAnswers({ similarQuestionsDecision: "separate" })}>
-                        <strong>Use separate statistical tests</strong>
-                        <p>The questions are similar, but they cannot be answered cleanly in one test</p>
-                      </ButtonChoice>
-                      <ButtonChoice selected={answers.similarQuestionsDecision === "ask_ta"} onClick={() => updateAnswers({ similarQuestionsDecision: "ask_ta", numTests: "" })}>
-                        <strong>I am not sure</strong>
-                        <p>Ask a TA or instructor before choosing the analysis</p>
-                      </ButtonChoice>
+                    <strong>Check any statements that are true.</strong>
+                    <p className="mt-1 text-slate-600">
+                      The app will use your checked statements to recommend whether the questions should be handled together or separately.
+                    </p>
+                    <div className="mt-3 space-y-2">
+                      {[
+                        ["same_outcome", "The questions measure the same outcome variable, or the same kind of outcome variable."],
+                        ["same_experiment", "The questions come from the same experiment or dataset."],
+                        ["one_changed_variable", "The questions mostly differ by one added group, treatment, dose, species, sex, or time point."],
+                        ["same_samples_or_matched", "The same samples, animals, or people appear in more than one condition or time point."],
+                        ["effect_changes_across_group", "I want to know whether the pattern changes depending on another grouping variable, such as whether a treatment effect differs between males and females."],
+                        ["different_outcomes", "The questions use clearly different outcome variables that would need to be explained separately."],
+                        ["different_designs", "The questions come from different experimental designs."],
+                        ["unrelated_data", "The questions use unrelated datasets or answer genuinely different biological questions."],
+                      ].map(([value, label]) => (
+                        <label key={value} className="flex gap-2 rounded border border-slate-200 bg-slate-50 p-3">
+                          <input
+                            type="checkbox"
+                            checked={answers.similarQuestionChecks.includes(value as SimilarQuestionCheck)}
+                            onChange={() => toggleSimilarQuestionCheck(value as SimilarQuestionCheck)}
+                          />
+                          <span>{label}</span>
+                        </label>
+                      ))}
                     </div>
                   </div>
 
                   {answers.similarQuestionsDecision === "single" && (
                     <div className="rounded bg-blue-700 p-3 text-white">
-                      <strong>Proceed as one analysis:</strong> enter all relevant groups, conditions, factors, or time points into the same dataset and let the app guide you to the appropriate single test.
+                      <strong>Recommendation: handle these together as one analysis.</strong> The questions look like parts of the same overall design. Keeping them together usually gives a stronger analysis than splitting them into many smaller questions.
                     </div>
                   )}
 
                   {answers.similarQuestionsDecision === "separate" && (
-                    <div>
-                      <label className="block font-semibold">How many separate tests will you run in total?</label>
-                      <input
-                        type="number"
-                        min={2}
-                        className="mt-1 w-32 rounded border p-2"
-                        placeholder="e.g. 6"
-                        value={answers.numTests}
-                        onChange={(e) => updateAnswers({ numTests: e.target.value })}
-                      />
-                      <p className="mt-1 text-xs text-slate-600">This number is used later for the Bonferroni correction.</p>
+                    <div className="space-y-3">
+                      <div className="rounded bg-slate-700 p-3 text-white">
+                        <strong>Recommendation: keep these as separate analyses.</strong> At least one checked statement suggests that the questions are different enough that they should not be forced into one combined analysis.
+                      </div>
+                      <div>
+                        <label className="block font-semibold">How many separate analyses will you run in total?</label>
+                        <input
+                          type="number"
+                          min={2}
+                          className="mt-1 w-32 rounded border p-2"
+                          placeholder="e.g. 6"
+                          value={answers.numTests}
+                          onChange={(e) => updateAnswers({ numTests: e.target.value })}
+                        />
+                        <p className="mt-1 text-xs text-slate-600">This number is used later to adjust how strong the evidence needs to be before you call a result significant.</p>
+                      </div>
                     </div>
                   )}
 
                   {answers.similarQuestionsDecision === "ask_ta" && (
-                    <div className="rounded bg-slate-700 p-3 text-white">
-                      Ask for help before continuing. Choosing separate tests when one combined test is possible can make the analysis weaker and harder to interpret.
+                    <div className="rounded bg-amber-200 p-3 text-slate-900">
+                      <strong>Recommendation: ask a TA or instructor before continuing.</strong> The checked statements are not enough to confidently decide whether the questions belong together or separately.
                     </div>
                   )}
                 </div>
