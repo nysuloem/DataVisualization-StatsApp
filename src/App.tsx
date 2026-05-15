@@ -8,7 +8,7 @@ type NumFactors = "" | "one" | "two";
 type ReferenceDesign = "" | "single" | "multiple_one_factor" | "multiple_two_factors" | "multiple_matched";
 type Pairing = "" | "independent" | "paired" | "one_sample" | "mixed";
 type YesNo = "" | "yes" | "no";
-type SimilarQuestionsDecision = "" | "single" | "separate" | "ask_ta";
+type SimilarQuestionsDecision = "" | "single" | "separate" | "continue";
 type SimilarQuestionCheck =
   | "same_outcome"
   | "same_experiment"
@@ -411,6 +411,7 @@ summary(model)
       "If the interaction is significant, use emmeans to test simple effects.",
     ],
     rCode: `library(emmeans)
+# If needed, run install.packages("emmeans") once before library(emmeans).
 
 # Replace variable names and values with your own
 outcome  <- c(12.1, 11.8, 13.0, 12.5, 10.9, 11.4, 14.2, 13.8, 15.1, 14.5, 13.2, 13.9)
@@ -449,6 +450,7 @@ pairs(emm, adjust = "tukey")`,
       "If the interaction is significant, use emmeans to test simple effects.",
     ],
     rCode: `library(emmeans)
+# If needed, run install.packages("emmeans") once before library(emmeans).
 
 # Long-format data frame — replace variable names and values with your own
 subject    <- c(1,1,1, 2,2,2, 3,3,3, 4,4,4)
@@ -468,8 +470,8 @@ emm <- emmeans(model, ~ condition | group)
 pairs(emm, adjust = "tukey")`,
   },
   advanced_nonparametric_model: {
-    title: "Advanced non-parametric / robust model needed",
-    when: "Your design has either two categorical factors or a mixed independent/repeated structure, but the data are skewed or outlier-heavy. A standard two-way ANOVA or mixed ANOVA would conflict with the earlier decision to use a non-parametric approach.",
+    title: "Model-based analysis with an outlier sensitivity check",
+    when: "Your design has more than one explanatory variable, and the data are skewed or include influential outliers. Instead of switching back to a simple parametric test, use R to keep the design together and then check whether the outlier changes the conclusion.",
     assumptions: [
       "I have a continuous outcome variable",
       "The design is more complex than a simple two-group or one-factor comparison",
@@ -477,16 +479,16 @@ pairs(emm, adjust = "tukey")`,
       "I will not ignore or delete outliers unless there is clear evidence of a data-entry or measurement error",
     ],
     prism: [
-      "GraphPad Prism is not a good starting point for this design once the data are outlier-heavy or strongly non-normal.",
-      "Do not switch back to a regular two-way ANOVA just because the design has two factors.",
-      "Ask your TA or instructor whether the course expects a simplified analysis, a data transformation, or an R-based robust/non-parametric model.",
+      "GraphPad Prism can still be used to graph the data, but R is better for keeping this design together while checking outlier influence.",
+      "Do not switch back to a regular two-way or mixed ANOVA just because the design has two factors.",
+      "Use R for a model-based sensitivity check: run the planned model with all data, then repeat it without the possible outlier only to see whether the conclusion changes.",
       "As a sensitivity check, compare the conclusion with and without the outlier, but do not delete the outlier from the final analysis unless there is clear evidence it is an error.",
     ],
     rSteps: [
       "Create a long-format data frame with one row per observation.",
       "First run the planned model using the full dataset.",
       "Then repeat the analysis without the outlier only as a sensitivity check.",
-      "If the conclusion changes, report that the result is sensitive to an outlier and ask for instructor guidance before making a strong claim.",
+      "If the conclusion changes, report that the result is sensitive to an outlier and avoid making a strong claim from that analysis alone.",
     ],
     rCode: `# This is a sensitivity-check template, not a one-size-fits-all test.
 # Replace variable names with your own.
@@ -527,7 +529,7 @@ summary(sensitivity_model)
       "GraphPad Prism can graph this design easily, but the combined reference-value analysis is clearer in R.",
       "Create a Column table with one column for each group or condition.",
       "Show individual data points with Mean and SD, and add a horizontal reference line at the reference value.",
-      "If your course requires Prism only, ask your TA or instructor whether to run separate one-sample analyses with a correction or to use R for the combined analysis.",
+      "If you are using Prism only, run the simpler planned reference-value analyses separately and apply a multiple-comparisons correction; use R when you want the combined model-based version.",
     ],
     rSteps: [
       "Create a data frame with one column for the outcome and one column for the group or condition.",
@@ -536,23 +538,26 @@ summary(sensitivity_model)
       "Use a multiple-comparisons correction because several means are being compared with the same reference value.",
     ],
     rCode: `library(emmeans)
+# If needed, run install.packages("emmeans") once before library(emmeans).
 
-# Example: one yeast strain tested with multiple substrates
-oxidation <- c(0.42, 0.38, 0.45, 0.04, 0.02, 0.05)
-substrate <- c("glucose", "glucose", "glucose", "stevia", "stevia", "stevia")
+# Example: one response measured in several treatment conditions
+response <- c(0.42, 0.38, 0.45, 0.16, 0.20, 0.18, 0.05, 0.02, 0.04)
+condition <- c("treatment A", "treatment A", "treatment A",
+               "treatment B", "treatment B", "treatment B",
+               "treatment C", "treatment C", "treatment C")
 
-df <- data.frame(oxidation, substrate)
-model <- lm(oxidation ~ substrate, data = df)
+df <- data.frame(response, condition)
+model <- lm(response ~ condition, data = df)
 
-# Estimated mean oxidation for each substrate
-emm <- emmeans(model, ~ substrate)
+# Estimated mean response for each condition
+emm <- emmeans(model, ~ condition)
 emm
 
-# Test whether each substrate mean differs from zero
-# adjust = "bonferroni" is simple and conservative for beginner use
+# Test whether each condition mean differs from the reference value
+# Here the reference value is zero; change null = if your reference value is different
 test(emm, null = 0, adjust = "bonferroni")
 
-# Optional: compare substrates to each other
+# Optional: compare conditions to each other
 pairs(emm, adjust = "tukey")`,
   },
   two_factor_reference_model: {
@@ -568,7 +573,7 @@ pairs(emm, adjust = "tukey")`,
       "GraphPad Prism can make the grouped graph, but the planned reference-value comparisons are clearer in R.",
       "Create a Grouped table with one factor in rows and the other factor in columns.",
       "Show individual data points with Mean and SD, and add a horizontal reference line at the reference value.",
-      "If your course requires Prism only, ask your TA or instructor whether to simplify the analysis or use R for the planned comparisons.",
+      "If you are using Prism only, use it for the graph and for simpler planned comparisons; use R when you want the combined two-factor model-based version.",
     ],
     rSteps: [
       "Create a data frame with one outcome column and one column for each grouping variable.",
@@ -577,28 +582,30 @@ pairs(emm, adjust = "tukey")`,
       "Test each combination against the reference value using a multiple-comparisons correction.",
     ],
     rCode: `library(emmeans)
+# If needed, run install.packages("emmeans") once before library(emmeans).
 
-# Example: two yeast strains tested with glucose and stevia
-oxidation <- c(0.42, 0.38, 0.45, 0.04, 0.02, 0.05,
-               0.30, 0.34, 0.28, 0.01, 0.03, 0.02)
-strain <- c("strain 1", "strain 1", "strain 1", "strain 1", "strain 1", "strain 1",
-            "strain 2", "strain 2", "strain 2", "strain 2", "strain 2", "strain 2")
-substrate <- c("glucose", "glucose", "glucose", "stevia", "stevia", "stevia",
-               "glucose", "glucose", "glucose", "stevia", "stevia", "stevia")
+# Example: one response measured across two grouping variables
+response <- c(0.42, 0.38, 0.45, 0.16, 0.20, 0.18,
+              0.30, 0.34, 0.28, 0.05, 0.03, 0.04)
+factor1 <- c("group 1", "group 1", "group 1", "group 1", "group 1", "group 1",
+             "group 2", "group 2", "group 2", "group 2", "group 2", "group 2")
+factor2 <- c("condition A", "condition A", "condition A", "condition B", "condition B", "condition B",
+             "condition A", "condition A", "condition A", "condition B", "condition B", "condition B")
 
-df <- data.frame(oxidation, strain, substrate)
-model <- lm(oxidation ~ strain * substrate, data = df)
+df <- data.frame(response, factor1, factor2)
+model <- lm(response ~ factor1 * factor2, data = df)
 summary(model)
 
-# Estimated mean oxidation for each strain-substrate combination
-emm <- emmeans(model, ~ strain * substrate)
+# Estimated mean response for each factor1-factor2 combination
+emm <- emmeans(model, ~ factor1 * factor2)
 emm
 
-# Test whether each strain-substrate combination differs from zero
+# Test whether each combination differs from the reference value
+# Here the reference value is zero; change null = if needed
 test(emm, null = 0, adjust = "bonferroni")
 
-# Optional: compare glucose vs stevia within each strain
-pairs(emmeans(model, ~ substrate | strain), adjust = "bonferroni")`,
+# Optional: compare condition A vs condition B within each group
+pairs(emmeans(model, ~ factor2 | factor1), adjust = "bonferroni")`,
   },
   repeated_reference_model: {
     title: "Repeated-measures model with planned comparisons against a reference value",
@@ -613,7 +620,7 @@ pairs(emmeans(model, ~ substrate | strain), adjust = "bonferroni")`,
       "GraphPad Prism can graph this as paired or repeated data, but the combined reference-value analysis is clearer in R.",
       "Create a Column table and choose the option for paired or repeated values entered in rows.",
       "Show individual data points with Mean and SD, and add a horizontal reference line at the reference value.",
-      "If your course requires Prism only, ask your TA or instructor whether to use repeated one-sample analyses with a correction or to use R for the combined analysis.",
+      "If you are using Prism only, run the repeated-condition reference-value analyses separately with a correction; use R when you want the combined matched/repeated model-based version.",
     ],
     rSteps: [
       "Create a long-format data frame with subject/sample ID, condition, and outcome columns.",
@@ -622,24 +629,26 @@ pairs(emmeans(model, ~ substrate | strain), adjust = "bonferroni")`,
       "Test each condition mean against the reference value using a multiple-comparisons correction.",
     ],
     rCode: `library(emmeans)
+# If needed, run install.packages("emmeans") once before library(emmeans).
 
-# Example: the same yeast preparations tested with multiple substrates
+# Example: the same samples measured in several conditions
 sample_id <- factor(c(1,1, 2,2, 3,3, 4,4))
-substrate <- c("glucose", "stevia", "glucose", "stevia", "glucose", "stevia", "glucose", "stevia")
-oxidation <- c(0.42, 0.04, 0.38, 0.02, 0.45, 0.05, 0.40, 0.03)
+condition <- c("condition A", "condition B", "condition A", "condition B",
+               "condition A", "condition B", "condition A", "condition B")
+response <- c(0.42, 0.16, 0.38, 0.20, 0.45, 0.18, 0.40, 0.14)
 
-df <- data.frame(sample_id, substrate, oxidation)
+df <- data.frame(sample_id, condition, response)
 
 # Beginner-friendly repeated-measures model
-model <- aov(oxidation ~ substrate + Error(sample_id/substrate), data = df)
+model <- aov(response ~ condition + Error(sample_id/condition), data = df)
 summary(model)
 
-# For planned condition means against zero, a mixed model is cleaner:
+# For planned condition means against the reference value, a mixed model is cleaner:
 # install.packages("lme4") and install.packages("lmerTest") once if needed
 library(lme4)
 library(lmerTest)
-mixed_model <- lmer(oxidation ~ substrate + (1 | sample_id), data = df)
-emm <- emmeans(mixed_model, ~ substrate)
+mixed_model <- lmer(response ~ condition + (1 | sample_id), data = df)
+emm <- emmeans(mixed_model, ~ condition)
 test(emm, null = 0, adjust = "bonferroni")`,
   },
 
@@ -818,7 +827,7 @@ function similarQuestionsRecommendation(checks: SimilarQuestionCheck[]): Similar
   // but require enough other agreement before making a confident recommendation.
   if (hasSameOutcome && hasMatchedSamples && (hasSameExperiment || hasOneChangedVariable)) return "single";
 
-  if (checks.length > 0) return "ask_ta";
+  if (checks.length > 0) return "continue";
   return "";
 }
 
@@ -1128,6 +1137,157 @@ function CodeBox({ code }: { code: string }) {
   );
 }
 
+
+function isModelBasedRPath(resultKey: TestKey | null) {
+  return Boolean(
+    resultKey === "linear_model" ||
+      resultKey === "two_way_anova" ||
+      resultKey === "mixed_anova" ||
+      resultKey === "one_factor_reference_model" ||
+      resultKey === "two_factor_reference_model" ||
+      resultKey === "repeated_reference_model" ||
+      resultKey === "advanced_nonparametric_model"
+  );
+}
+
+function RDataTableGuide({ resultKey }: { resultKey: TestKey }) {
+  if (resultKey === "one_factor_reference_model") {
+    return (
+      <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm">
+        <strong>How your data should look in R</strong>
+        <p className="mt-1">Use one row for each measurement. The response column contains the measured value. The condition column tells R which group or condition that measurement came from.</p>
+        <table className="mt-3 w-full border-collapse bg-white text-xs">
+          <thead><tr><th className="border p-2 text-left">condition</th><th className="border p-2 text-left">response</th></tr></thead>
+          <tbody>
+            <tr><td className="border p-2">A</td><td className="border p-2">0.42</td></tr>
+            <tr><td className="border p-2">A</td><td className="border p-2">0.38</td></tr>
+            <tr><td className="border p-2">B</td><td className="border p-2">0.16</td></tr>
+            <tr><td className="border p-2">B</td><td className="border p-2">0.20</td></tr>
+          </tbody>
+        </table>
+        <p className="mt-2"><strong>Reference value:</strong> the code uses <code>null = 0</code>. Change 0 if your reference value is different.</p>
+      </div>
+    );
+  }
+
+  if (resultKey === "two_factor_reference_model" || resultKey === "two_way_anova" || resultKey === "advanced_nonparametric_model") {
+    return (
+      <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm">
+        <strong>How your data should look in R</strong>
+        <p className="mt-1">Use one row for each measurement. The response column contains the measured value. The factor columns describe the experimental condition for that row.</p>
+        <table className="mt-3 w-full border-collapse bg-white text-xs">
+          <thead><tr><th className="border p-2 text-left">factor1</th><th className="border p-2 text-left">factor2</th><th className="border p-2 text-left">response</th></tr></thead>
+          <tbody>
+            <tr><td className="border p-2">A</td><td className="border p-2">X</td><td className="border p-2">0.42</td></tr>
+            <tr><td className="border p-2">A</td><td className="border p-2">X</td><td className="border p-2">0.38</td></tr>
+            <tr><td className="border p-2">A</td><td className="border p-2">Y</td><td className="border p-2">0.16</td></tr>
+            <tr><td className="border p-2">B</td><td className="border p-2">X</td><td className="border p-2">0.30</td></tr>
+            <tr><td className="border p-2">B</td><td className="border p-2">Y</td><td className="border p-2">0.05</td></tr>
+          </tbody>
+        </table>
+        <p className="mt-2">The model line <code>response ~ factor1 * factor2</code> tells R to test factor1, factor2, and whether the effect of one factor depends on the other.</p>
+      </div>
+    );
+  }
+
+  if (resultKey === "mixed_anova" || resultKey === "repeated_reference_model") {
+    return (
+      <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm">
+        <strong>How your data should look in R</strong>
+        <p className="mt-1">Use one row for each measurement. If the same sample, animal, person, or class dataset was measured more than once, include a subject column so R knows which rows belong together.</p>
+        <table className="mt-3 w-full border-collapse bg-white text-xs">
+          <thead><tr><th className="border p-2 text-left">subject</th><th className="border p-2 text-left">group</th><th className="border p-2 text-left">condition</th><th className="border p-2 text-left">response</th></tr></thead>
+          <tbody>
+            <tr><td className="border p-2">1</td><td className="border p-2">A</td><td className="border p-2">before</td><td className="border p-2">12.1</td></tr>
+            <tr><td className="border p-2">1</td><td className="border p-2">A</td><td className="border p-2">after</td><td className="border p-2">10.4</td></tr>
+            <tr><td className="border p-2">2</td><td className="border p-2">B</td><td className="border p-2">before</td><td className="border p-2">13.0</td></tr>
+            <tr><td className="border p-2">2</td><td className="border p-2">B</td><td className="border p-2">after</td><td className="border p-2">11.2</td></tr>
+          </tbody>
+        </table>
+        <p className="mt-2">Rows with the same subject number are linked measurements from the same experimental unit.</p>
+      </div>
+    );
+  }
+
+  if (resultKey === "linear_model") {
+    return (
+      <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm">
+        <strong>How your data should look in R</strong>
+        <p className="mt-1">Use one row for each observation. Put the measured outcome in one column, then put each possible explanatory variable in its own column.</p>
+        <table className="mt-3 w-full border-collapse bg-white text-xs">
+          <thead><tr><th className="border p-2 text-left">outcome</th><th className="border p-2 text-left">predictor1</th><th className="border p-2 text-left">predictor2</th></tr></thead>
+          <tbody>
+            <tr><td className="border p-2">12.1</td><td className="border p-2">A</td><td className="border p-2">4.2</td></tr>
+            <tr><td className="border p-2">11.8</td><td className="border p-2">A</td><td className="border p-2">3.9</td></tr>
+            <tr><td className="border p-2">13.0</td><td className="border p-2">B</td><td className="border p-2">5.1</td></tr>
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  return null;
+}
+
+function ROutputGuide({ resultKey }: { resultKey: TestKey }) {
+  if (resultKey === "one_factor_reference_model" || resultKey === "two_factor_reference_model" || resultKey === "repeated_reference_model") {
+    return (
+      <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm">
+        <strong>How to read the R output</strong>
+        <ul className="mt-2 space-y-1">
+          <li>• <code>emm</code> shows the estimated mean response for each group or condition.</li>
+          <li>• <code>test(emm, null = 0, adjust = "bonferroni")</code> tests whether each mean differs from the reference value.</li>
+          <li>• In that output, use the adjusted <code>p.value</code> column. If p &lt; 0.05, that condition differs significantly from the reference value.</li>
+          <li>• If R says there is no package called <code>emmeans</code>, run <code>install.packages("emmeans")</code> once, then run the code again.</li>
+        </ul>
+      </div>
+    );
+  }
+
+  if (resultKey === "two_way_anova" || resultKey === "mixed_anova") {
+    return (
+      <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm">
+        <strong>How to read the R output</strong>
+        <ul className="mt-2 space-y-1">
+          <li>• First find the interaction term, usually written like <code>factor1:factor2</code> or <code>group:condition</code>.</li>
+          <li>• If the interaction p-value is significant, the effect of one variable depends on the other variable. Interpret simple effects rather than only main effects.</li>
+          <li>• If the interaction is not significant, then read the main-effect rows for each variable.</li>
+          <li>• If you use <code>emmeans</code>, read the adjusted <code>p.value</code> column for the follow-up comparisons.</li>
+        </ul>
+      </div>
+    );
+  }
+
+  if (resultKey === "advanced_nonparametric_model") {
+    return (
+      <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm">
+        <strong>How to read the sensitivity check</strong>
+        <ul className="mt-2 space-y-1">
+          <li>• Compare the main conclusion from <code>full_model</code> with the conclusion from <code>sensitivity_model</code>.</li>
+          <li>• If both analyses lead to the same biological conclusion, the result is less dependent on the outlier.</li>
+          <li>• If the conclusion changes, say that the result is sensitive to the outlier and avoid making a strong claim from that analysis alone.</li>
+        </ul>
+      </div>
+    );
+  }
+
+  if (resultKey === "linear_model") {
+    return (
+      <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm">
+        <strong>How to read the R output</strong>
+        <ul className="mt-2 space-y-1">
+          <li>• In <code>summary(model)</code>, the coefficients table gives one row for each predictor.</li>
+          <li>• The <code>Estimate</code> column tells you the direction and size of the effect.</li>
+          <li>• The <code>Pr(&gt;|t|)</code> column is the p-value for that predictor.</li>
+          <li>• <code>Multiple R-squared</code> tells you how much of the variation in the outcome is explained by the model.</li>
+        </ul>
+      </div>
+    );
+  }
+
+  return null;
+}
+
 export default function App() {
   const [answers, setAnswers] = useState<Answers>(INITIAL_ANSWERS);
   const [checked, setChecked] = useState<number[]>([]);
@@ -1139,6 +1299,21 @@ export default function App() {
       const similarQuestionChecks = prev.similarQuestionChecks.includes(check)
         ? prev.similarQuestionChecks.filter((item) => item !== check)
         : [...prev.similarQuestionChecks, check];
+      const similarQuestionsDecision = similarQuestionsRecommendation(similarQuestionChecks);
+      return {
+        ...prev,
+        similarQuestionChecks,
+        similarQuestionsDecision,
+        numTests: similarQuestionsDecision === "separate" ? prev.numTests : "",
+      };
+    });
+  };
+
+  const toggleSimilarQuestionPair = (check: SimilarQuestionCheck, pair: SimilarQuestionCheck[]) => {
+    setAnswers((prev) => {
+      const alreadySelected = prev.similarQuestionChecks.includes(check);
+      const withoutPair = prev.similarQuestionChecks.filter((item) => !pair.includes(item));
+      const similarQuestionChecks = alreadySelected ? withoutPair : [...withoutPair, check];
       const similarQuestionsDecision = similarQuestionsRecommendation(similarQuestionChecks);
       return {
         ...prev,
@@ -1324,21 +1499,25 @@ export default function App() {
                   </div>
 
                   <div className="rounded bg-white p-3">
-                    <strong>Check any statements that are true.</strong>
+                    <strong>Choose the statement that best fits each pair.</strong>
                     <p className="mt-1 text-slate-600">
-                      Work through each pair. The app will use your answers to recommend whether the questions should be handled together or separately.
+                      For the paired choices, selecting one automatically clears the opposing choice. The app will use your answers to recommend whether the questions should be handled together or separately.
                     </p>
                     <div className="mt-3 space-y-3">
                       {[
                         {
                           heading: "Outcome variable",
+                          prompt: "Are the questions measuring the same kind of response, or different responses?",
+                          exclusive: true,
                           options: [
-                            ["same_outcome", "Same outcome: the questions measure the same response variable, such as oxidation rate, heart rate, enzyme activity, or body mass."],
+                            ["same_outcome", "Same outcome: the questions measure the same response variable, such as heart rate, enzyme activity, body mass, pigment concentration, growth rate, or movement speed."],
                             ["different_outcomes", "Different outcomes: the questions measure clearly different response variables that would need to be explained separately."],
                           ],
                         },
                         {
                           heading: "Experimental design",
+                          prompt: "Do the questions come from the same experimental design, or different designs?",
+                          exclusive: true,
                           options: [
                             ["same_experiment", "Same experiment/design: the questions come from the same dataset and were collected using the same basic design."],
                             ["different_designs", "Different designs: the questions come from different experiments or use different sampling structures."],
@@ -1346,52 +1525,54 @@ export default function App() {
                         },
                         {
                           heading: "What changes between the questions?",
+                          prompt: "Is the difference between questions focused, or are the questions really about different things?",
+                          exclusive: true,
                           options: [
                             ["one_changed_variable", "One thing changes: the questions mostly differ by one group, treatment, dose, species, sex, time point, or substrate."],
                             ["unrelated_data", "Many things change: the questions use unrelated datasets or answer genuinely different biological questions."],
                           ],
                         },
                         {
-                          heading: "Repeated or matched measurements",
+                          heading: "Additional features that may connect the questions",
+                          prompt: "Check any extra statements that apply.",
+                          exclusive: false,
                           options: [
                             ["same_samples_or_matched", "The same samples, animals, people, or matched class datasets appear in more than one condition or time point."],
-                          ],
-                        },
-                        {
-                          heading: "Reference value",
-                          options: [
-                            ["same_reference", "The questions compare the same outcome against the same reference value, such as asking whether oxidation is greater than zero in multiple substrates."],
-                          ],
-                        },
-                        {
-                          heading: "Pattern across another variable",
-                          options: [
+                            ["same_reference", "The questions compare the same outcome against the same reference value, such as asking whether several treatment groups differ from zero change, baseline, or a known expected value."],
                             ["effect_changes_across_group", "I want to know whether the pattern changes depending on another grouping variable, such as whether a treatment effect differs between males and females."],
                           ],
                         },
-                      ].map((section) => (
-                        <div key={section.heading} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                          <div className="mb-2 font-semibold text-slate-900">{section.heading}</div>
-                          <div className={`grid gap-2 ${section.options.length === 2 ? "md:grid-cols-2" : ""}`}>
-                            {section.options.map(([value, label]) => (
-                              <label key={value} className="flex gap-2 rounded border border-slate-200 bg-white p-3">
-                                <input
-                                  type="checkbox"
-                                  checked={answers.similarQuestionChecks.includes(value as SimilarQuestionCheck)}
-                                  onChange={() => toggleSimilarQuestionCheck(value as SimilarQuestionCheck)}
-                                />
-                                <span>{label}</span>
-                              </label>
-                            ))}
+                      ].map((section) => {
+                        const pair = section.options.map(([value]) => value as SimilarQuestionCheck);
+                        return (
+                          <div key={section.heading} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                            <div className="font-semibold text-slate-900">{section.heading}</div>
+                            <p className="mb-2 mt-1 text-xs text-slate-600">{section.prompt}</p>
+                            <div className={`grid gap-2 ${section.options.length === 2 ? "md:grid-cols-2" : ""}`}>
+                              {section.options.map(([value, label]) => (
+                                <label key={value} className="flex gap-2 rounded border border-slate-200 bg-white p-3">
+                                  <input
+                                    type="checkbox"
+                                    checked={answers.similarQuestionChecks.includes(value as SimilarQuestionCheck)}
+                                    onChange={() =>
+                                      section.exclusive
+                                        ? toggleSimilarQuestionPair(value as SimilarQuestionCheck, pair)
+                                        : toggleSimilarQuestionCheck(value as SimilarQuestionCheck)
+                                    }
+                                  />
+                                  <span>{label}</span>
+                                </label>
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
 
                   {answers.similarQuestionChecks.includes("same_reference") && (
                     <div className="rounded bg-blue-50 p-3 text-sm text-slate-900">
-                      <strong>Reference-value note:</strong> When the same outcome is compared against the same reference value in several related conditions, treat the condition itself as part of the design. For example, instead of asking separately whether yeast oxidized glucose and whether yeast oxidized stevia, frame the analysis around oxidation across substrate conditions, with zero oxidation as the reference point.
+                      <strong>Reference-value note:</strong> When the same outcome is compared against the same reference value in several related conditions, treat the condition itself as part of the design. For example, instead of asking several separate questions about whether each treatment differs from zero change, frame the analysis around the response across treatment conditions, with the shared reference value built into the analysis.
                     </div>
                   )}
 
@@ -1421,9 +1602,9 @@ export default function App() {
                     </div>
                   )}
 
-                  {answers.similarQuestionsDecision === "ask_ta" && (
+                  {answers.similarQuestionsDecision === "continue" && (
                     <div className="rounded bg-amber-200 p-3 text-slate-900">
-                      <strong>Recommendation: ask a TA or instructor before continuing.</strong> The checked statements are not enough to confidently decide whether the questions belong together or separately.
+                      <strong>Recommendation: continue with the question above.</strong> The checked statements do not clearly show that the questions must be combined or must be separated. Continue through the app for this research question, and use the later design choices to decide whether the analysis should stay simple or become a combined analysis.
                     </div>
                   )}
                 </div>
@@ -1432,7 +1613,7 @@ export default function App() {
           )}
         </Panel>
 
-        {answers.questionSubmitted && (answers.multipleTests === "no" || (answers.multipleTests === "yes" && (answers.similarQuestionsDecision === "single" || (answers.similarQuestionsDecision === "separate" && answers.numTests)))) && (
+        {answers.questionSubmitted && (answers.multipleTests === "no" || (answers.multipleTests === "yes" && (answers.similarQuestionsDecision === "single" || answers.similarQuestionsDecision === "continue" || (answers.similarQuestionsDecision === "separate" && answers.numTests)))) && (
           <Panel title="Step 2: Understand your data">
 
             {/* ── Step 2a: Variable type ── */}
@@ -1556,7 +1737,7 @@ export default function App() {
                   <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-bold text-white">2c</span>
                   <span className="font-semibold">How many things are you comparing with the reference value?</span>
                 </div>
-                <p className="mb-3 text-sm text-slate-600">Use this when your reference value is something like zero oxidation, zero change, or a known expected value.</p>
+                <p className="mb-3 text-sm text-slate-600">Use this when your reference value is something like zero change, baseline, a null expectation, or a known expected value.</p>
                 <div className="grid gap-3 text-sm">
                   <ButtonChoice selected={answers.referenceDesign === "single"} onClick={() => updateAnswers({ referenceDesign: "single" })}>
                     <strong>One set of measurements</strong>
@@ -1564,15 +1745,15 @@ export default function App() {
                   </ButtonChoice>
                   <ButtonChoice selected={answers.referenceDesign === "multiple_one_factor"} onClick={() => updateAnswers({ referenceDesign: "multiple_one_factor" })}>
                     <strong>Several groups or conditions, organized by one variable</strong>
-                    <p>Example: yeast oxidation measured for glucose, stevia, and sucrose, all compared with zero.</p>
+                    <p>Example: one response measured across several treatments, doses, temperatures, species, or time points, all compared with the same reference value.</p>
                   </ButtonChoice>
                   <ButtonChoice selected={answers.referenceDesign === "multiple_two_factors"} onClick={() => updateAnswers({ referenceDesign: "multiple_two_factors" })}>
                     <strong>Several combinations, organized by two variables</strong>
-                    <p>Example: two yeast strains tested with glucose and stevia, with each strain-substrate combination compared with zero.</p>
+                    <p>Example: one response measured across combinations of two grouping variables, such as treatment × sex, temperature × species, or dose × time, with each combination compared with the same reference value.</p>
                   </ButtonChoice>
                   <ButtonChoice selected={answers.referenceDesign === "multiple_matched"} onClick={() => updateAnswers({ referenceDesign: "multiple_matched" })}>
                     <strong>The same samples were tested in several conditions</strong>
-                    <p>Example: the same yeast preparation was tested with glucose and stevia, so the measurements are linked.</p>
+                    <p>Example: the same samples, animals, people, or class datasets were measured under several conditions, so the measurements are linked.</p>
                   </ButtonChoice>
                 </div>
               </>
@@ -1700,7 +1881,7 @@ export default function App() {
                 )}
                 {answers.shape === "outliers" && (
                   <div className="mt-3 rounded bg-amber-50 p-4 text-sm ring-2 ring-amber-300">
-                    <strong>How to think about the outlier:</strong> An outlier can sometimes be a data-entry or measurement error. However, in this course the dataset has been vetted by the TAs, so do not delete the value just because it is inconvenient. Instead, treat it as a real observation and ask whether it is strongly influencing the statistical conclusion. A good sensitivity check is to compare the conclusion with and without the outlier and report if the conclusion changes.
+                    <strong>How to think about the outlier:</strong> An outlier can sometimes be a data-entry or measurement error. However, in this course the dataset has been vetted before being posted, so do not delete the value just because it is inconvenient. Instead, treat it as a real observation and ask whether it is strongly influencing the statistical conclusion. A good sensitivity check is to compare the conclusion with and without the outlier and report if the conclusion changes.
                   </div>
                 )}
               </div>
@@ -1829,13 +2010,22 @@ export default function App() {
               <div>
                 <div className="mb-3 rounded bg-emerald-50 p-3 text-sm">
                   <strong>Important:</strong> You have already visualized your data. Now you are testing that same dataset in R.
+                  <p className="mt-2">
+                    If R is not installed on your computer, download it from the official CRAN website: {" "}
+                    <a className="font-semibold underline" href="https://cran.r-project.org/" target="_blank" rel="noreferrer">
+                      Download R
+                    </a>
+                    . Choose the version for your operating system. You do not need to install RStudio for this tool. You can copy and paste the code below into the basic R program after installing R.
+                  </p>
                 </div>
+                {resultKey && isModelBasedRPath(resultKey) && <RDataTableGuide resultKey={resultKey} />}
                 <ol className="ml-5 list-decimal space-y-2 text-sm">
                   {result.rSteps.map((step) => (
                     <li key={step}>{step}</li>
                   ))}
                 </ol>
                 <CodeBox code={result.rCode} />
+                {resultKey && isModelBasedRPath(resultKey) && <ROutputGuide resultKey={resultKey} />}
               </div>
             )}
 
