@@ -499,8 +499,8 @@ df <- data.frame(
   factor2 = c("X", "Y", "X", "Y", "X", "Y")
 )
 
-# 1. Plot the full dataset and identify the possible outlier.
-boxplot(outcome ~ factor1 * factor2, data = df)
+# 1. Identify the possible outlier from the graph you already made in GraphPad.
+# Note the outlier value so you can temporarily exclude it in the sensitivity check below.
 
 # 2. Run the full planned analysis first.
 full_model <- lm(outcome ~ factor1 * factor2, data = df)
@@ -1185,7 +1185,6 @@ function RDataTableGuide({ resultKey }: { resultKey: TestKey }) {
           </tbody>
         </table>
         <p className="mt-2">The model line <code>response ~ factor1 * factor2</code> tells R to test factor1, factor2, and whether the effect of one factor depends on the other. This last part is the <strong>interaction</strong>.</p>
-        <p className="mt-2"><strong>No sample ID needed here:</strong> for independent class data, do not add an ID column. An ID column is only needed for a true paired/repeated design, where the exact same physical sample was measured more than once.</p>
       </div>
     );
   }
@@ -1537,7 +1536,7 @@ export default function App() {
                           prompt: "Choose any additional statements that apply.",
                           exclusive: false,
                           options: [
-                            ["same_samples_or_matched", "The same measured units appear in more than one condition or time point."],
+                            ["same_samples_or_matched", "The same sample, organism, person, plant, culture, tube, well, or class group was measured more than once."],
                             ["same_reference", "The questions compare the same outcome with the same reference value, such as zero or baseline."],
                             ["effect_changes_across_group", "I want to know whether the effect of one condition changes across another sample feature."],
                           ],
@@ -1550,8 +1549,9 @@ export default function App() {
                             <p className="mb-2 mt-1 text-xs text-slate-600">{section.prompt}</p>
                             <div className={`grid gap-2 ${section.options.length === 2 ? "md:grid-cols-2" : ""}`}>
                               {section.options.map(([value, label]) => (
-                                <label key={value} className="flex gap-2 rounded border border-slate-200 bg-white p-3">
+                                <label key={value} className="flex items-center gap-3 rounded border border-slate-200 bg-white p-3">
                                   <input
+                                    className="shrink-0"
                                     type="checkbox"
                                     checked={answers.similarQuestionChecks.includes(value as SimilarQuestionCheck)}
                                     onChange={() =>
@@ -1871,11 +1871,6 @@ export default function App() {
                 {(answers.shape === "skewed" || answers.shape === "outliers" || answers.shape === "nonlinear") && (
                   <div className="rounded bg-blue-700 p-3 text-white">
                     <strong>Non-parametric tests recommended</strong>
-                  </div>
-                )}
-                {answers.shape === "outliers" && (
-                  <div className="mt-3 rounded bg-amber-50 p-4 text-sm ring-2 ring-amber-300">
-                    <strong>How to think about the outlier:</strong> An outlier can sometimes be a data-entry or measurement error. However, in this course the dataset has been vetted before being posted, so do not delete the value just because it is inconvenient. First, run the recommended test using all of the data. Then repeat the same test after temporarily removing the possible outlier as a sensitivity check. Do not switch to a different test for the second run, because then you cannot tell whether the conclusion changed because of the outlier or because of the different test. If the conclusion changes, report that the result is sensitive to the outlier.
                   </div>
                 )}
               </div>
